@@ -11,6 +11,11 @@ from pathlib import Path
 import click
 
 from . import preflight
+from .android_signing import (
+    AndroidSigningConfig,
+    apply_release_signing,
+    release_output_paths,
+)
 from .config import DEFAULT_CAPACITOR_DIR, DEV_BACKEND_URL_ENV
 from .dev_util import guess_lan_ip, wait_for_http_ok, wait_for_port
 
@@ -315,6 +320,174 @@ def run(platform: str, app_dir: str, skip_sync: bool, target: str | None) -> Non
     if target:
         cmd.extend(["--target", target])
     _run(cmd, cwd=cap_root)
+
+
+def _android_dir(cap_root: Path) -> Path:
+    android = cap_root / "android"
+    if not android.is_dir():
+        raise click.ClickException(
+            f"Android project missing at {android} — run `reflex-capacitor init --platform android`"
+        )
+    return android
+
+
+def _gradle_build(android_root: Path, task: str) -> None:
+    gradlew = android_root / ("gradlew.bat" if os.name == "nt" else "gradlew")
+    if not gradlew.is_file():
+        raise click.ClickException(f"Gradle wrapper missing at {gradlew}")
+    if os.name != "nt":
+        gradlew.chmod(gradlew.stat().st_mode | 0o111)
+    _run([str(gradlew), task, "--no-daemon", "--stacktrace"], cwd=android_root)
+
+
+def _resolve_android_signing(
+    keystore_path: str | None,
+    keystore_password: str | None,
+    key_alias: str | None,
+    key_password: str | None,
+) -> AndroidSigningConfig | None:
+    """Resolve signing from CLI flags or environment."""
+    if keystore_path:
+        if not (keystore_password and key_alias and key_password):
+            raise click.ClickException(
+                "with --keystore-path also pass --keystore-password, --key-alias, --key-password "
+                "(or set REFLEX_CAPACITOR_KEYSTORE_* env vars)"
+            )
+        return AndroidSigningConfig(
+            keystore_path=Path(keystore_path),
+            keystore_password=keystore_password,
+            key_alias=key_alias,
+            key_password=key_password,
+        )
+    try:
+        return AndroidSigningConfig.from_env()
+    except (ValueError, FileNotFoundError) as exc:
+        raise click.ClickException(str(exc)) from exc
+
+
+@main.command()
+@click.argument("platform", type=click.Choice(["android", "ios"]))
+@click.option(
+    "--app-dir",
+    default=".",
+    type=click.Path(file_okay=False, dir_okay=True, path_type=str),
+)
+@click.option(
+    "--release/--debug",
+    default=True,
+    help="Release (signed when keystore env is set) or debug build.",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["apk", "aab"]),
+    default="apk",
+    help="Android output type (release only; AAB for Play Store).",
+)
+@click.option("--skip-sync", is_flag=True, help="Skip export + cap sync before building.")
+@click.option(
+    "--keystore-path",
+    default=None,
+    envvar="REFLEX_CAPACITOR_KEYSTORE_PATH",
+    type=click.Path(exists=True, dir_okay=False, path_type=str),
+    help="Android release keystore (.jks / .keystore).",
+)
+@click.option(
+    "--keystore-password",
+    default=None,
+    envvar="REFLEX_CAPACITOR_KEYSTORE_PASSWORD",
+    help="Keystore password.",
+)
+@click.option(
+    "--key-alias",
+    default=None,
+    envvar="REFLEX_CAPACITOR_KEY_ALIAS",
+    help="Key alias inside the keystore.",
+)
+@click.option(
+    "--key-password",
+    default=None,
+    envvar="REFLEX_CAPACITOR_KEY_PASSWORD",
+    help="Key password.",
+)
+def build(
+    platform: str,
+    app_dir: str,
+    release: bool,
+    output_format: str,
+    skip_sync: bool,
+    keystore_path: str | None,
+    keystore_password: str | None,
+    key_alias: str | None,
+    key_password: str | None,
+) -> None:
+    """Build a release/debug APK/AAB (Android) or archive (iOS, macOS only)."""
+    if platform == "ios" and sys.platform != "darwin":
+        raise click.ClickException("iOS build requires macOS + Xcode.")
+
+    app_root = Path(app_dir).resolve()
+    os.chdir(app_root)
+    _preflight(need_android=platform == "android", need_ios=platform == "ios")
+    plugin = _ensure_plugin(app_root)
+    cap_root = _capacitor_root(app_root, plugin)
+
+    if not skip_sync:
+        ctx = click.get_current_context()
+        ctx.invoke(
+            sync,
+            app_dir=app_dir,
+            skip_export=False,
+            platforms=(platform,),
+        )
+    else:
+        _ensure_platform(cap_root, platform)
+
+    if platform == "android":
+        android_root = _android_dir(cap_root)
+        if release:
+            signing = _resolve_android_signing(
+                keystore_path,
+                keystore_password,
+                key_alias,
+                key_password,
+            )
+            if signing:
+                apply_release_signing(android_root, signing)
+                click.echo(f"reflex-capacitor: release signing configured ({signing.key_alias})")
+            else:
+                click.echo(
+                    click.style(
+                        "reflex-capacitor: no keystore — release build may fail. "
+                        "Set REFLEX_CAPACITOR_KEYSTORE_* or see docs/publishing.md.",
+                        fg="yellow",
+                    )
+                )
+            task = "bundleRelease" if output_format == "aab" else "assembleRelease"
+        else:
+            task = "assembleDebug"
+        click.echo(f"reflex-capacitor: ./gradlew {task}")
+        _gradle_build(android_root, task)
+        artifacts = release_output_paths(android_root, aab=release and output_format == "aab")
+        if not artifacts and not release:
+            artifacts = sorted((android_root / "app" / "build" / "outputs" / "apk" / "debug").glob("*.apk"))
+        if artifacts:
+            click.echo(click.style("Build output:", fg="green"))
+            for path in artifacts:
+                click.echo(f"  {path}")
+        else:
+            click.echo(
+                click.style(
+                    "Build finished — check android/app/build/outputs/ for artifacts.",
+                    fg="green",
+                )
+            )
+        return
+
+    cap_cmd = [*_npx_cmd(), "cap", "build", "ios"]
+    if release:
+        cap_cmd.extend(["--xcode-export-method", "release-testing"])
+    click.echo(f"reflex-capacitor: {' '.join(cap_cmd)}")
+    _run(cap_cmd, cwd=cap_root)
 
 
 def _default_dev_ports() -> tuple[int, int]:

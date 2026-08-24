@@ -4,15 +4,16 @@ Ship the same Reflex frontend you already have into an iOS / Android WebView via
 [Capacitor](https://capacitorjs.com), talking to a **hosted** Reflex backend over HTTPS/WSS.
 
 ```bash
-pip install -e .          # or: uv sync && uv pip install -e .
+pip install -e .
 reflex-capacitor doctor
-reflex-capacitor init     # scaffold capacitor/ + add android
-# set CapacitorPlugin(backend_url="https://your-api…") in rxconfig.py
-reflex-capacitor run android
+reflex-capacitor init --platform android
+# configure CapacitorPlugin(backend_url=...) in rxconfig.py
+reflex-capacitor sync
+reflex-capacitor run android          # debug on device/emulator
+reflex-capacitor build android        # release APK/AAB
 ```
 
-Phase 1 scope: **shell + remote backend** only (no in-app Python, no native bridge yet).
-Design notes live under [`docs/`](docs/).
+Design notes: [`docs/`](docs/) · Roadmap: [`docs/04-roadmap.md`](docs/04-roadmap.md)
 
 ## Wire it up
 
@@ -20,15 +21,17 @@ Design notes live under [`docs/`](docs/).
 # rxconfig.py
 import reflex as rx
 from reflex_capacitor import CapacitorPlugin
+from reflex_capacitor.bridge.plugins import DEMO_PLUGINS
 
 config = rx.Config(
     app_name="demo",
-    cors_allowed_origins=["*"],  # or capacitor://localhost, http://localhost
+    cors_allowed_origins=["*"],  # production: restrict to your API + Capacitor origins
     plugins=[
         CapacitorPlugin(
             backend_url="https://api.example.com",
             app_id="com.example.myapp",
             app_name="My App",
+            plugins=DEMO_PLUGINS,
         ),
     ],
 )
@@ -36,38 +39,59 @@ config = rx.Config(
 
 ## Commands
 
-```bash
-reflex-capacitor doctor              # Node / npm (+ optional Android / iOS flags)
-reflex-capacitor init                # scaffold capacitor/, npm i, cap add android
-reflex-capacitor sync                # reflex export → www/ → npx cap sync
-reflex-capacitor run android         # sync + launch emulator/device
-reflex-capacitor open android        # Android Studio
-```
+| Command | Purpose |
+|---------|---------|
+| `reflex-capacitor doctor` | Check Node / npm / optional Android SDK |
+| `reflex-capacitor init` | Scaffold `capacitor/`, `npm install`, `cap add` |
+| `reflex-capacitor sync` | `reflex export` → `www/` → `npx cap sync` |
+| `reflex-capacitor run android\|ios` | Sync + launch on device/emulator |
+| `reflex-capacitor dev android` | LAN dev: export + backend on `0.0.0.0` + run ([dev-reload.md](docs/dev-reload.md)) |
+| `reflex-capacitor build android\|ios` | Release/debug APK, AAB, or iOS archive ([publishing.md](docs/publishing.md)) |
+| `reflex-capacitor open android\|ios` | Open Android Studio / Xcode |
 
 On Windows, **Android** is the practical target; iOS needs macOS.
+
+## Python API (`mobile.*`)
+
+```python
+from reflex_capacitor import mobile
+
+# P0 — notify, toast, share, clipboard, device, …
+mobile.notify("Hello", "From Reflex")
+
+# P1 — camera, geolocation, preferences, filesystem, …
+mobile.get_current_position(State.on_gps)
+
+# Phase 3 — native → Reflex events
+mobile.setup_native_listeners(back_button="emit")
+mobile.poll_native_events(State.on_native_events)
+```
+
+Full API: [`docs/02-native-bridge.md`](docs/02-native-bridge.md)
 
 ## Layout
 
 | Path | Role |
 |------|------|
-| `src/reflex_capacitor/` | Installable library (`CapacitorPlugin`, CLI) |
-| `demo/` | Sample Reflex app in this repo |
-| `capacitor/` | Generated Capacitor project (after `init` / `sync`) |
+| `src/reflex_capacitor/` | Library (`CapacitorPlugin`, CLI, bridge) |
+| `demo/` | Sample Reflex app |
+| `capacitor/` | Generated Capacitor project (after `init`) |
 
-## Backend URL tips
+## Backend URL
 
-- Production: HTTPS API + WSS event endpoint (baked into `env.json` at export time).
-- Emulator → host machine: often `http://10.0.2.2:8000` (Android emulator loopback to host).
-- Physical device: use your PC's LAN IP and open the firewall for the backend port.
-- CI：set `REFLEX_CAPACITOR_DEV_BACKEND_URL` or the workflow input — see [`docs/ci.md`](docs/ci.md).
-- 后续阶段待办：[`docs/04-roadmap.md`](docs/04-roadmap.md).
+| Environment | URL | Notes |
+|-------------|-----|-------|
+| Production | `https://…` | WSS event; required for store builds |
+| LAN dev | `http://192.168.x.x:8001` | Needs cleartext + `androidScheme: http` (auto) |
+| Emulator → host | `http://10.0.2.2:8000` | Android emulator loopback |
 
-## CI (no Android Studio on your PC)
+## CI
 
-GitHub Actions [`.github/workflows/android-apk.yml`](.github/workflows/android-apk.yml)
-builds a **debug APK**. Backend URL is read from **Environment secret**
-`REFLEX_BACKEND_URL` (environments: `lan` / `staging` / `production`).
+- **Debug APK** — push/PR builds `lan`; manual matrix for staging/production ([ci.md](docs/ci.md))
+- **Release AAB** — manual workflow + production signing secrets ([publishing.md](docs/publishing.md))
 
-1. Create Environments + secret (see [`docs/ci.md`](docs/ci.md))
-2. Actions → **Android APK** → Run workflow → pick environment
-3. Download artifact `app-debug-<env>` and install on a phone
+## Limitations
+
+- **Remote backend only** — no embedded Python on device
+- **Not a mobile UI kit** — use Reflex components + `mobile.*` bridge
+- Push notifications / biometrics — Phase 4+ optional ([roadmap](docs/04-roadmap.md))

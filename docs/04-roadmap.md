@@ -173,27 +173,26 @@
 
 ### 4.1 构建与签名
 
-- [ ] CLI `reflex-capacitor build android|ios`（release）
-- [ ] 文档 [publishing.md](publishing.md)：
-  - [ ] Android：keystore、`.aab` / `.apk` 签名
-  - [ ] iOS：证书、Provisioning、Archive（需 Mac）
-- [ ] CI：可选 release 流水线（secrets 存签名材料）
+- [x] CLI `reflex-capacitor build android|ios`（release / debug）
+- [x] 文档 [publishing.md](publishing.md)：
+  - [x] Android：keystore、`.aab` / `.apk` 签名
+  - [x] iOS：证书、Archive（需 Mac，概要）
+- [x] CI：可选 release 流水线 `android-release-aab.yml`（production secrets）
 
 ### 4.2 推送与高级能力（按需）
 
 | 能力 | 插件 | 阶段 |
 |------|------|------|
-| 远程推送 | push-notifications | P2，需 FCM / APNs 配置 |
-| 生物识别 | community | P2 |
-| 条码扫描 | community | P2 |
-| 应用内浏览器 | browser | P2 |
-| 深链 `appUrlOpen` | app | 与 3.3 联动 |
+| 远程推送 | push-notifications | 按需，需 FCM / APNs |
+| 生物识别 | community | 按需 |
+| 条码扫描 | community | 按需 |
+| 深链 `appUrlOpen` | app | 与 3.3 联动（事件已入队） |
 
 ### 4.3 运维与文档
 
-- [ ] CI：多环境 matrix（lan / staging / production）
-- [ ] README 对标 reflex-desktop 完整度（命令表、rxconfig 示例、限制说明）
-- [ ] CHANGELOG 维护
+- [x] CI：多环境 matrix（lan / staging / production）
+- [x] README 命令表 + 限制说明
+- [x] CHANGELOG 维护
 
 **粗估**：持续迭代。
 
@@ -232,7 +231,7 @@ Phase 4    release 构建 + 签名文档 + 推送等 + CI 加固
 | 路径 | Phase |
 |------|-------|
 | `src/reflex_capacitor/plugin.py` | 1 ✅ + icon |
-| `src/reflex_capacitor/cli.py` | 1 ✅ + `dev` (Phase 3) |
+| `src/reflex_capacitor/cli.py` | 1 ✅ + `dev` + `build` |
 | `src/reflex_capacitor/preflight.py` | 1 ✅ |
 | `src/reflex_capacitor/bridge/`（api、inject、assets） | 2 ✅ |
 | `demo/demo.py` 原生 Tab + P1 + 反向事件 | 3 ✅ |
@@ -240,14 +239,14 @@ Phase 4    release 构建 + 签名文档 + 推送等 + CI 加固
 | `.github/workflows/android-apk.yml` | 2 ✅（Environment matrix） |
 | `docs/permissions.md` / `docs/debug.md` | 2 ✅ |
 | `docs/dev-reload.md` | 3 ✅ |
-| `docs/publishing.md` | 4 ⬜ |
+| `docs/publishing.md` | 4 ✅ |
+| `CHANGELOG.md` | 4 ✅ |
+| `.github/workflows/android-release-aab.yml` | 4 ✅ |
 
 ---
 
-## 下一步：Phase 4（发布加固）
+## 下一步（按需）
 
-- ⬜ `reflex-capacitor build` release 打包
-- ⬜ 推送 / 定位稳定性等按需迭代
-- ⬜ iOS 真机 / 模拟器验证（需 Mac）
-
-Phase 3 收尾已完成：`dev` 命令、反向原生事件、文档与测试。
+- 远程推送 FCM / APNs
+- 定位真机稳定性
+- iOS CI（需 macOS runner）

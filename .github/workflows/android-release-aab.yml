@@ -1,0 +1,109 @@
+# Optional: signed release AAB for Google Play (production backend only).
+# Trigger manually — requires production Environment secrets.
+
+name: Android Release AAB
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: |
+          uv sync
+          uv pip install -e ".[dev]"
+      - run: uv run pytest tests/ -q
+
+  release-aab:
+    name: Release AAB (production)
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Python deps
+        run: |
+          uv sync
+          uv pip install -e .
+
+      - name: Validate secrets
+        env:
+          BACKEND_URL: ${{ secrets.REFLEX_BACKEND_URL }}
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in BACKEND_URL KEYSTORE_B64 KEYSTORE_PASS KEY_ALIAS KEY_PASS; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing secret for production release ($name)"
+              exit 1
+            fi
+          done
+          if [[ "$BACKEND_URL" != https://* ]]; then
+            echo "::error::Production REFLEX_BACKEND_URL must be https://"
+            exit 1
+          fi
+
+      - name: Write keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+          ls -la "$RUNNER_TEMP/release.keystore"
+
+      - name: Scaffold & sync
+        env:
+          REFLEX_CAPACITOR_DEV_BACKEND_URL: ${{ secrets.REFLEX_BACKEND_URL }}
+        run: |
+          uv run reflex-capacitor init --platform android
+          uv run reflex-capacitor sync
+
+      - name: Build signed AAB
+        env:
+          REFLEX_CAPACITOR_KEYSTORE_PATH: ${{ runner.temp }}/release.keystore
+          REFLEX_CAPACITOR_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          REFLEX_CAPACITOR_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          REFLEX_CAPACITOR_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: uv run reflex-capacitor build android --format aab --skip-sync
+
+      - name: Upload AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-production
+          path: capacitor/android/app/build/outputs/bundle/release/*.aab
+          if-no-files-found: error
+          retention-days: 30

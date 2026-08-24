@@ -60,6 +60,24 @@ reflex run --env prod --backend-only --backend-host 0.0.0.0 --backend-port 8001
 
 构建完成后 → 对应 job → **Artifacts** → `app-debug-lan`（或 staging / production）。
 
+## Release AAB（可选）
+
+Workflow **Android Release AAB**（仅 `workflow_dispatch`）打 **signed AAB**，用于 Google Play。
+
+**Environment：`production`** 需配置：
+
+| Secret | 说明 |
+|--------|------|
+| `REFLEX_BACKEND_URL` | 必须 `https://…` |
+| `ANDROID_KEYSTORE_BASE64` | `base64 -w0 release.keystore` |
+| `ANDROID_KEYSTORE_PASSWORD` | keystore 密码 |
+| `ANDROID_KEY_ALIAS` | 别名 |
+| `ANDROID_KEY_PASSWORD` | 密钥密码 |
+
+Actions → **Android Release AAB** → Run workflow → 下载 `app-release-production`。
+
+本地等价命令见 [publishing.md](publishing.md)。
+
 ## 可选：App 图标
 
 `rxconfig.py`：
