@@ -166,16 +166,23 @@ class CapacitorPlugin(Plugin):
         conf["appName"] = app_name
         conf["webDir"] = self.web_dir
         server = conf.setdefault("server", {})
-        server.setdefault("androidScheme", "https")
         # Android blocks cleartext (http) by default from API 28+. Capacitor's
         # ``server.cleartext`` maps to ``android:usesCleartextTraffic`` on sync.
-        # Without it the WebView can load, but every http(s) API/WS call to a LAN
-        # backend fails even though the phone browser can open the same URL.
+        #
+        # Critical for LAN http backends: Capacitor defaults ``androidScheme`` to
+        # ``https``, so the WebView origin is ``https://localhost``. A page on
+        # https cannot open ``ws://…`` (mixed content) — the UI loads, then
+        # ``cannot connect to server: timeout`` on ``/_event``. For http backends
+        # we must use ``androidScheme: http`` so ``ws://`` is allowed.
         base = self._backend_base()
         if base and base.startswith("http://"):
             server["cleartext"] = True
+            server["androidScheme"] = "http"
         elif base and base.startswith("https://"):
             server["cleartext"] = False
+            server["androidScheme"] = "https"
+        else:
+            server.setdefault("androidScheme", "https")
         conf_path.write_text(json.dumps(conf, indent=2) + "\n", encoding="utf-8")
 
     def ensure_android_cleartext(self, project_root: Path | None = None) -> None:

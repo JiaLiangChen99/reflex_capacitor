@@ -99,11 +99,13 @@ jobs:
           cat "$ENV_JS"
           echo
           grep -q '192.168.1.56:8001' "$ENV_JS"
+          grep -q 'ws://192.168.1.56:8001/_event' "$ENV_JS"
           grep -q '"cleartext": true' capacitor/capacitor.config.json
+          grep -q '"androidScheme": "http"' capacitor/capacitor.config.json
           echo "== AndroidManifest cleartext =="
           grep -n 'usesCleartextTraffic\|INTERNET' capacitor/android/app/src/main/AndroidManifest.xml
           grep -q 'usesCleartextTraffic="true"' capacitor/android/app/src/main/AndroidManifest.xml
-          echo "OK: backend URL baked and cleartext enabled"
+          echo "OK: backend URL baked; cleartext + http scheme enabled (needed for ws://)"
 
       - name: Assemble debug APK
         working-directory: capacitor/android
