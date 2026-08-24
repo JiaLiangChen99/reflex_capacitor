@@ -1,0 +1,8 @@
+{
+  "appId": "dev.reflex.app",
+  "appName": "Reflex App",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  }
+}

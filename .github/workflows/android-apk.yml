@@ -1,0 +1,105 @@
+# Build a debug APK. Backend URL comes from GitHub Environment secrets
+# (not hard-coded in the workflow), so lan / staging / production stay separate.
+#
+# Setup (once per environment):
+#   Settings → Environments → New environment  (e.g. lan, staging, production)
+#   Add Environment secret:  REFLEX_BACKEND_URL = https://…  (or http://192.168.x.x:8001)
+#
+# Run: Actions → Android APK → Run workflow → pick Environment
+
+name: Android APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_env:
+        description: "GitHub Environment that provides secret REFLEX_BACKEND_URL"
+        type: choice
+        required: true
+        default: lan
+        options:
+          - lan
+          - staging
+          - production
+  push:
+    branches: [main, master]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-apk-${{ github.workflow }}-${{ github.event.inputs.target_env || 'staging' }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-apk:
+    name: APK (${{ github.event.inputs.target_env || 'staging' }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # Binds this job to an Environment so secrets.REFLEX_BACKEND_URL is env-scoped.
+    environment: ${{ github.event.inputs.target_env || 'staging' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup uv (Python)
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Python deps
+        run: |
+          uv sync
+          uv pip install -e .
+
+      - name: Require REFLEX_BACKEND_URL secret
+        id: backend
+        env:
+          REFLEX_BACKEND_URL: ${{ secrets.REFLEX_BACKEND_URL }}
+        run: |
+          if [ -z "$REFLEX_BACKEND_URL" ]; then
+            echo "::error::Missing Environment secret REFLEX_BACKEND_URL for environment '${{ github.event.inputs.target_env || 'staging' }}'."
+            echo "::error::Create it under Settings → Environments → (this env) → Environment secrets."
+            exit 1
+          fi
+          # Do not echo the full URL if it contains credentials; print host-ish only.
+          echo "url=$REFLEX_BACKEND_URL" >> "$GITHUB_OUTPUT"
+          echo "Using REFLEX_BACKEND_URL from environment (length ${#REFLEX_BACKEND_URL})"
+
+      - name: Scaffold Capacitor + Android
+        run: uv run reflex-capacitor init --platform android
+
+      - name: Export frontend & cap sync
+        env:
+          REFLEX_CAPACITOR_DEV_BACKEND_URL: ${{ steps.backend.outputs.url }}
+        run: uv run reflex-capacitor sync
+
+      - name: Assemble debug APK
+        working-directory: capacitor/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-${{ github.event.inputs.target_env || 'staging' }}
+          path: capacitor/android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
