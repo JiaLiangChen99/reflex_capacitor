@@ -58,6 +58,53 @@ def test_demo_plugins_include_p1():
     assert "camera" in DEMO_PLUGINS
 
 
+def test_apply_dev_server_sets_url(tmp_path: Path):
+    conf_path = tmp_path / "capacitor.config.json"
+    conf_path.write_text("{}", encoding="utf-8")
+    plugin = CapacitorPlugin(backend_url="http://192.168.1.56:8001")
+    plugin.apply_dev_server(tmp_path, frontend_url="http://192.168.1.56:3000")
+    conf = json.loads(conf_path.read_text(encoding="utf-8"))
+    assert conf["server"]["url"] == "http://192.168.1.56:3000"
+    assert conf["server"]["cleartext"] is True
+    assert conf["server"]["androidScheme"] == "http"
+
+
+def test_clear_dev_server_removes_url(tmp_path: Path):
+    conf_path = tmp_path / "capacitor.config.json"
+    conf_path.write_text(
+        '{"server": {"url": "http://192.168.1.56:3000", "cleartext": true}}',
+        encoding="utf-8",
+    )
+    plugin = CapacitorPlugin(backend_url="http://192.168.1.56:8001")
+    plugin.clear_dev_server(tmp_path)
+    conf = json.loads(conf_path.read_text(encoding="utf-8"))
+    assert "url" not in conf.get("server", {})
+    assert conf["server"]["androidScheme"] == "http"
+
+
+def test_guess_lan_ip_returns_string():
+    from reflex_capacitor.dev_util import guess_lan_ip
+
+    ip = guess_lan_ip()
+    assert isinstance(ip, str)
+    assert ip.count(".") == 3
+
+
+def test_scaffold_package_json_lists_demo_plugins(tmp_path: Path, monkeypatch):
+    from reflex_capacitor.bridge.plugins import DEMO_PLUGINS
+
+    monkeypatch.chdir(tmp_path)
+    plugin = CapacitorPlugin(plugins=DEMO_PLUGINS)
+    cap_root = tmp_path / "capacitor"
+    plugin._scaffold(cap_root)
+    plugin._configure(cap_root)
+    pkg = json.loads((cap_root / "package.json").read_text(encoding="utf-8"))
+    deps = pkg.get("dependencies", {})
+    assert "@capacitor/core" in deps
+    assert "@capacitor/camera" in deps
+    assert "@capacitor/geolocation" in deps
+
+
 def test_apply_icon_copies_to_android_mipmaps(tmp_path: Path, monkeypatch):
     icon_src = tmp_path / "assets" / "icon.png"
     icon_src.parent.mkdir(parents=True)

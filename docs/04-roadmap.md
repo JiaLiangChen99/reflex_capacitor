@@ -143,23 +143,25 @@
 
 ### 3.2 `reflex-capacitor dev`
 
-- [ ] 启动 `reflex run`（或检测已在跑）— **回家有数据线/Android Studio 时再做**
-- [ ] 设置 `REFLEX_CAPACITOR_DEV_BACKEND_URL` + Cap `server.url` 指向开发机 LAN IP
-- [ ] 文档 [dev-reload.md](dev-reload.md)：真机与电脑同网、防火墙、端口
-- [ ] 可选：`VITE` / live reload 与 Cap 联调说明
+- [x] 启动 `reflex run`（默认 `--backend-only`，可选 `--live-reload`）
+- [x] 设置 `REFLEX_CAPACITOR_DEV_BACKEND_URL` + Cap `server.url`（live-reload 模式）
+- [x] 文档 [dev-reload.md](dev-reload.md)：真机与电脑同网、防火墙、端口
+- [x] LAN IP 自动检测 + `--lan-ip` 覆盖
 
 ### 3.3 原生 → Reflex 反向事件
 
-- [ ] Android 返回键 → 可选 State 回调
-- [ ] App 前台 / 后台 `appStateChange`
-- [ ] 键盘显隐（影响布局时可读 State）
-- [ ] 设计：`mobile.on_app_state(handler)` 或 `on_mount` + bridge listener
+- [x] Android 返回键 → `poll_native_events`（`back_button=emit|exit|history`）
+- [x] App 前台 / 后台 `appStateChange` + `pause` / `resume`
+- [x] 键盘显隐 `keyboardWillShow` / `keyboardWillHide`
+- [x] `mobile.setup_native_listeners()` + `mobile.poll_native_events(callback)`
+- [x] demo 原生 Tab 演示
 
 ### 3.4 质量
 
-- [ ] 单元测试：`update_env_json`、CORS 检测、HTML 注入、http/https scheme 选择
-- [ ] 集成测试：临时目录 scaffold + `package.json` 含声明插件
-- [ ] iOS：`cap add ios` + 至少模拟器跑通（需 macOS CI 或文档说明）
+- [x] 单元测试：`update_env_json`、http/https scheme、dev server 配置
+- [x] 单元测试：bridge 注入、插件列表
+- [ ] 集成测试：临时目录 scaffold + `package.json` 含声明插件（可选）
+- [ ] iOS：`cap add ios` + 至少模拟器跑通（需 macOS CI 或文档说明）— 见 [dev-reload.md](dev-reload.md)
 
 **粗估**：4–7 人天。
 
@@ -230,20 +232,22 @@ Phase 4    release 构建 + 签名文档 + 推送等 + CI 加固
 | 路径 | Phase |
 |------|-------|
 | `src/reflex_capacitor/plugin.py` | 1 ✅ + icon |
-| `src/reflex_capacitor/cli.py` | 1 ✅（缺 `dev` / `build` → Phase 3/4） |
+| `src/reflex_capacitor/cli.py` | 1 ✅ + `dev` (Phase 3) |
 | `src/reflex_capacitor/preflight.py` | 1 ✅ |
 | `src/reflex_capacitor/bridge/`（api、inject、assets） | 2 ✅ |
-| `demo/demo.py` 原生 Tab + P1 按钮 | 3 🚧 |
-| `tests/test_inject.py` / `tests/test_plugin.py` | 2 ✅ |
+| `demo/demo.py` 原生 Tab + P1 + 反向事件 | 3 ✅ |
+| `tests/test_inject.py` / `tests/test_plugin.py` | 2 ✅ / 3 ✅ |
 | `.github/workflows/android-apk.yml` | 2 ✅（Environment matrix） |
 | `docs/permissions.md` / `docs/debug.md` | 2 ✅ |
-| `docs/dev-reload.md` | 3 ⬜ |
+| `docs/dev-reload.md` | 3 ✅ |
 | `docs/publishing.md` | 4 ⬜ |
 
 ---
 
-## 下一步：Phase 3（进行中）
+## 下一步：Phase 4（发布加固）
 
-- ✅ P1 原生 API + demo（CI 打 APK 测试）
-- ⬜ `reflex-capacitor dev` 真机热重载（需本地 Android 环境）
-- ⬜ 反向事件（返回键 / app 生命周期）
+- ⬜ `reflex-capacitor build` release 打包
+- ⬜ 推送 / 定位稳定性等按需迭代
+- ⬜ iOS 真机 / 模拟器验证（需 Mac）
+
+Phase 3 收尾已完成：`dev` 命令、反向原生事件、文档与测试。

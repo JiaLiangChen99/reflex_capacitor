@@ -12,6 +12,7 @@ import click
 
 from . import preflight
 from .config import DEFAULT_CAPACITOR_DIR, DEV_BACKEND_URL_ENV
+from .dev_util import guess_lan_ip, wait_for_http_ok, wait_for_port
 
 
 def _find_plugin(app_root: Path):
@@ -314,6 +315,155 @@ def run(platform: str, app_dir: str, skip_sync: bool, target: str | None) -> Non
     if target:
         cmd.extend(["--target", target])
     _run(cmd, cwd=cap_root)
+
+
+def _default_dev_ports() -> tuple[int, int]:
+    """Return Reflex default frontend/backend dev ports."""
+    try:
+        from reflex_base.constants import DefaultPorts
+
+        return int(DefaultPorts.FRONTEND_PORT), int(DefaultPorts.BACKEND_PORT)
+    except (ImportError, AttributeError, TypeError, ValueError):
+        return 3000, 8000
+
+
+def _backend_health_url(backend_port: int) -> str:
+    """Build the Reflex backend health check URL on loopback."""
+    try:
+        from reflex_base.config import get_config
+
+        config = get_config()
+        prepend = getattr(config, "prepend_backend_path", None)
+        path = prepend("/_health") if callable(prepend) else "/_health"
+    except Exception:  # noqa: BLE001
+        path = "/_health"
+    return f"http://127.0.0.1:{backend_port}{path}"
+
+
+@main.command()
+@click.argument("platform", type=click.Choice(["android", "ios"]))
+@click.option(
+    "--app-dir",
+    default=".",
+    type=click.Path(file_okay=False, dir_okay=True, path_type=str),
+)
+@click.option(
+    "--lan-ip",
+    default=None,
+    help="Dev machine LAN IP for the phone (default: auto-detect).",
+)
+@click.option("--frontend-port", default=None, type=int, help="Reflex dev frontend port.")
+@click.option("--backend-port", default=None, type=int, help="Reflex dev backend port.")
+@click.option(
+    "--live-reload/--no-live-reload",
+    default=False,
+    help="Load UI from the dev frontend (server.url) instead of bundled www/.",
+)
+@click.option("--skip-export", is_flag=True, help="Reuse existing www/ (still runs cap sync).")
+@click.option(
+    "--target",
+    default=None,
+    help="Optional device / emulator id passed to `npx cap run`.",
+)
+def dev(
+    platform: str,
+    app_dir: str,
+    lan_ip: str | None,
+    frontend_port: int | None,
+    backend_port: int | None,
+    live_reload: bool,
+    skip_export: bool,
+    target: str | None,
+) -> None:
+    """Develop on a device: export, sync, start Reflex dev server, launch the app.
+
+    Default mode (``--no-live-reload``): bundles the static frontend into the APK shell
+    and runs only the Reflex **backend** on your LAN IP — same as CI + ``reflex run
+    --backend-only``, but automated.
+
+    With ``--live-reload``: points Capacitor ``server.url`` at the Vite dev server for
+    hot reload (phone and PC must be on the same Wi‑Fi; firewall must allow the ports).
+    """
+    if platform == "ios" and sys.platform != "darwin":
+        raise click.ClickException("iOS dev requires macOS + Xcode.")
+
+    app_root = Path(app_dir).resolve()
+    os.chdir(app_root)
+    _preflight(need_android=platform == "android", need_ios=platform == "ios")
+    plugin = _ensure_plugin(app_root)
+    cap_root = _capacitor_root(app_root, plugin)
+
+    if not (cap_root / "package.json").exists():
+        raise click.ClickException(
+            f"Capacitor project missing at {cap_root} — run `reflex-capacitor init` first"
+        )
+
+    default_fe, default_be = _default_dev_ports()
+    fe_port = frontend_port or default_fe
+    be_port = backend_port or default_be
+    host_ip = (lan_ip or guess_lan_ip()).strip()
+    backend_url = f"http://{host_ip}:{be_port}"
+    frontend_url = f"http://{host_ip}:{fe_port}"
+
+    click.echo(f"reflex-capacitor dev — LAN backend → {backend_url}")
+    if live_reload:
+        click.echo(f"reflex-capacitor dev — live UI     → {frontend_url}")
+    else:
+        click.echo("reflex-capacitor dev — UI from bundled www/ (re-export on each dev start)")
+
+    dev_env = {**os.environ, DEV_BACKEND_URL_ENV: backend_url}
+
+    if not skip_export:
+        click.echo("reflex-capacitor: exporting frontend with dev backend URL…")
+        _run([*_reflex_cmd(), "export", "--frontend-only"], cwd=app_root, env=dev_env)
+    elif not (cap_root / plugin.web_dir).is_dir():
+        raise click.ClickException(
+            f"no {plugin.web_dir}/ under {cap_root} — run without --skip-export first"
+        )
+
+    _npm_install(cap_root)
+    _finalize_bridge(plugin, cap_root)
+    _ensure_platform(cap_root, platform)
+
+    if live_reload:
+        plugin.apply_dev_server(cap_root, frontend_url=frontend_url)
+    else:
+        plugin.clear_dev_server(cap_root)
+
+    _cap_sync(cap_root)
+    plugin.ensure_android_cleartext(cap_root)
+
+    reflex_cmd = [*_reflex_cmd(), "run", "--backend-host", "0.0.0.0", "--backend-port", str(be_port)]
+    if live_reload:
+        reflex_cmd.extend(["--frontend-port", str(fe_port)])
+    else:
+        reflex_cmd.append("--backend-only")
+
+    click.echo(f"reflex-capacitor: starting `{' '.join(reflex_cmd[1:])}` …")
+    reflex_proc = subprocess.Popen(reflex_cmd, cwd=app_root, env=dev_env)
+    try:
+        if live_reload:
+            wait_for_port(fe_port, reflex_proc)
+        wait_for_port(be_port, reflex_proc)
+        wait_for_http_ok(_backend_health_url(be_port), reflex_proc)
+        click.echo(click.style("reflex dev server is up.", fg="green"))
+
+        cap_cmd = [*_npx_cmd(), "cap", "run", platform]
+        if target:
+            cap_cmd.extend(["--target", target])
+        _run(cap_cmd, cwd=cap_root)
+    except (RuntimeError, click.ClickException) as exc:
+        raise click.ClickException(str(exc)) from exc
+    finally:
+        if reflex_proc.poll() is None:
+            reflex_proc.terminate()
+            try:
+                reflex_proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                reflex_proc.kill()
+        if live_reload:
+            plugin.clear_dev_server(cap_root)
+            click.echo("reflex-capacitor: cleared Capacitor server.url (run sync before release builds)")
 
 
 @main.command("open")

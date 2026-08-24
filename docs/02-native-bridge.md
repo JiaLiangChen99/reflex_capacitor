@@ -171,22 +171,22 @@ def invoke(command: str, args: Mapping | None = None, *, callback=None) -> Event
 
 ---
 
-## 5. 原生 → Reflex 的反向事件（desktop 弱、移动端强）
+## 5. 原生 → Reflex 的反向事件（Phase 3 ✅）
 
-桌面桥几乎是 **Python→原生单向**。移动端常见：
+移动端常见：
 
 - 物理返回键（Android）
 - App 进入后台 / 前台
-- 推送点击
 - 键盘显隐
-- 深链 `appUrlOpen`
+- 深链 `appUrlOpen`（预留）
 
-建议二期机制：
+实现（Phase 3）：
 
-1. Bridge 监听 Cap 事件，写入 `window` 或调用一小段约定脚本。
-2. 或通过 `rx.call_script` 注册：`mobile.on_app_state(State.handle_state)` 在 `on_mount` 挂监听，内部用 Capacitor listener + 自定义 DOM event，再触发 Reflex。
+1. App 启动时调用 `mobile.setup_native_listeners(back_button="emit")` 注册 Capacitor 监听。
+2. 用 `mobile.poll_native_events(callback)` 取出事件队列（`[{ts, type, detail}, …]`）。
+3. `back_button`：`emit`（默认，入队）| `exit` | `history`。
 
-MVP 可先 **文档列出、API 占位**；P0 只做 Python→原生命令。
+详见 [dev-reload.md](dev-reload.md)。推送点击仍属 Phase 4（`push-notifications`）。
 
 ---
 

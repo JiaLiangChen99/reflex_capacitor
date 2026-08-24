@@ -20,7 +20,7 @@ from ._script import call_bridge, call_bridge_void
 ImpactStyle = Literal["HEAVY", "MEDIUM", "LIGHT"]
 NotificationStyle = Literal["SUCCESS", "WARNING", "ERROR"]
 StatusBarStyle = Literal["DARK", "LIGHT", "DEFAULT"]
-ToastDuration = Literal["short", "long"]
+BackButtonMode = Literal["emit", "exit", "history"]
 
 
 def notify(title: str, body: str = "") -> rx.event.EventSpec:
@@ -291,3 +291,32 @@ def edit_image(
     if web_path is not None:
         args["webPath"] = web_path
     return call_bridge("editImage", args, callback=callback)
+
+
+def setup_native_listeners(
+    *,
+    back_button: BackButtonMode = "emit",
+    callback: Any = None,
+) -> rx.event.EventSpec:
+    """Register native → WebView listeners (app lifecycle, back button, keyboard).
+
+    Call once on app load. Events are retrieved via :func:`poll_native_events`.
+
+    ``back_button``:
+      - ``emit`` — queue event for Reflex (default; blocks auto-exit on Android)
+      - ``exit`` — quit the app immediately
+      - ``history`` — ``window.history.back()`` when possible
+    """
+    return call_bridge(
+        "setupNativeListeners",
+        {"backButton": back_button},
+        callback=callback,
+    )
+
+
+def poll_native_events(callback: Any) -> rx.event.EventSpec:
+    """Drain queued native events since the last poll.
+
+    Callback receives ``{events: [{ts, type, detail}, ...]}``.
+    """
+    return call_bridge("drainNativeEvents", callback=callback)

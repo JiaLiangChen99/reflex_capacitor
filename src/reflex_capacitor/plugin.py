@@ -200,6 +200,36 @@ class CapacitorPlugin(Plugin):
             server.setdefault("androidScheme", "https")
         conf_path.write_text(json.dumps(conf, indent=2) + "\n", encoding="utf-8")
 
+    def apply_dev_server(self, project_root: Path, *, frontend_url: str) -> None:
+        """Point Capacitor WebView at a live dev frontend (``server.url``)."""
+        conf_path = project_root / "capacitor.config.json"
+        if conf_path.exists():
+            conf = json.loads(conf_path.read_text(encoding="utf-8"))
+        else:
+            conf = {}
+        server = conf.setdefault("server", {})
+        server["url"] = frontend_url.rstrip("/")
+        if frontend_url.startswith("http://"):
+            server["cleartext"] = True
+            server["androidScheme"] = "http"
+        else:
+            server["cleartext"] = False
+            server["androidScheme"] = "https"
+        conf_path.write_text(json.dumps(conf, indent=2) + "\n", encoding="utf-8")
+
+    def clear_dev_server(self, project_root: Path) -> None:
+        """Remove ``server.url`` so Capacitor loads the bundled ``www/`` again."""
+        conf_path = project_root / "capacitor.config.json"
+        if not conf_path.is_file():
+            return
+        conf = json.loads(conf_path.read_text(encoding="utf-8"))
+        server = conf.get("server")
+        if isinstance(server, dict):
+            server.pop("url", None)
+        conf_path.write_text(json.dumps(conf, indent=2) + "\n", encoding="utf-8")
+        app_name, app_id = self._resolved_names()
+        self._apply_capacitor_config(conf_path, app_name, app_id)
+
     def ensure_android_cleartext(self, project_root: Path | None = None) -> None:
         """Force ``usesCleartextTraffic`` when the backend is plain HTTP.
 

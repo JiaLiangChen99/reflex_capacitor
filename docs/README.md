@@ -10,6 +10,7 @@
 |------|------|
 | [04-roadmap.md](04-roadmap.md) | **Phase 1 回顾 + Phase 2–4 待办清单（防遗忘）** |
 | [docs/ci.md](ci.md) | GitHub Actions 打 debug APK（免本机 Android Studio） |
+| [dev-reload.md](dev-reload.md) | 真机开发 / `reflex-capacitor dev` |
 | [01-architecture.md](01-architecture.md) | 对标 reflex-desktop 的架构、模块划分、数据流 |
 | [02-native-bridge.md](02-native-bridge.md) | 原生能力清单、与 `desktop.py` 的映射、`mobile.py` API 设计 |
 | [03-development-plan.md](03-development-plan.md) | 开发要点、脚手架、CLI、分阶段交付、风险 |

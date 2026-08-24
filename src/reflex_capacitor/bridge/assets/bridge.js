@@ -8,7 +8,11 @@
   const Cap = typeof window !== "undefined" ? window.Capacitor : undefined;
   const Plugins = Cap && Cap.Plugins ? Cap.Plugins : {};
   const MAX_LOGS = 100;
+  const MAX_NATIVE_EVENTS = 200;
   const logs = [];
+  const nativeEvents = [];
+  let listenersReady = false;
+  let backButtonMode = "emit";
 
   function plugin(name) {
     if (Plugins[name]) return Plugins[name];
@@ -97,6 +101,70 @@
       }
     }
     return { ok: true };
+  }
+
+  function pushNativeEvent(type, detail) {
+    const entry = {
+      ts: new Date().toISOString(),
+      type: type,
+      detail: detail || {},
+    };
+    nativeEvents.push(entry);
+    if (nativeEvents.length > MAX_NATIVE_EVENTS) {
+      nativeEvents.shift();
+    }
+    addLog("info", "nativeEvent", entry);
+  }
+
+  async function setupNativeListeners({ backButton }) {
+    if (listenersReady) {
+      return { ok: true, already: true, backButton: backButtonMode };
+    }
+    backButtonMode = backButton || "emit";
+    const AppPlugin = plugin("App");
+    if (AppPlugin) {
+      AppPlugin.addListener("appStateChange", function (state) {
+        pushNativeEvent("appStateChange", { isActive: state.isActive });
+      });
+      AppPlugin.addListener("backButton", function () {
+        pushNativeEvent("backButton", {});
+        if (backButtonMode === "exit") {
+          AppPlugin.exitApp();
+          return;
+        }
+        if (backButtonMode === "history" && window.history && window.history.length > 1) {
+          window.history.back();
+        }
+      });
+      AppPlugin.addListener("appUrlOpen", function (data) {
+        pushNativeEvent("appUrlOpen", { url: data && data.url ? data.url : "" });
+      });
+      AppPlugin.addListener("pause", function () {
+        pushNativeEvent("pause", {});
+      });
+      AppPlugin.addListener("resume", function () {
+        pushNativeEvent("resume", {});
+      });
+    }
+    const Keyboard = plugin("Keyboard");
+    if (Keyboard) {
+      Keyboard.addListener("keyboardWillShow", function (info) {
+        pushNativeEvent("keyboardWillShow", {
+          keyboardHeight: info && info.keyboardHeight != null ? info.keyboardHeight : 0,
+        });
+      });
+      Keyboard.addListener("keyboardWillHide", function () {
+        pushNativeEvent("keyboardWillHide", {});
+      });
+    }
+    listenersReady = true;
+    return { ok: true, backButton: backButtonMode };
+  }
+
+  function drainNativeEvents() {
+    const events = nativeEvents.slice();
+    nativeEvents.length = 0;
+    return { ok: true, count: events.length, events: events };
   }
 
   const core = {
@@ -558,10 +626,17 @@
         pluginsLoaded: loaded,
         pluginsMissing: missing,
         logCount: logs.length,
+        nativeListenerReady: listenersReady,
+        nativeEventBuffer: nativeEvents.length,
         location: typeof window !== "undefined" && window.location ? window.location.href : "",
         userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "",
       };
     },
+
+    setupNativeListeners: wrap("setupNativeListeners", setupNativeListeners),
+    drainNativeEvents: wrap("drainNativeEvents", function () {
+      return drainNativeEvents();
+    }),
   };
 
   Object.keys(core).forEach(function (key) {

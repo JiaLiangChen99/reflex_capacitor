@@ -29,18 +29,25 @@ class State(rx.State):
     bridge_msg: str = "点击下方按钮调用 Capacitor 原生能力（需在壳内运行）。"
     debug_diag: str = "进入本页或点「刷新诊断」查看 WebView / 插件状态。"
     debug_client_logs: str = "客户端日志：点原生按钮后点「刷新日志」。"
+    native_events: str = "进入「原生」页后自动监听；点「刷新原生事件」查看。"
     server_logs: list[str] = []
 
     def _append_server_log(self, line: str) -> None:
         self.server_logs = [line, *self.server_logs[:49]]
 
     @rx.event
+    def on_app_load(self):
+        return mobile.setup_native_listeners(back_button="emit")
+
+    @rx.event
     def set_tab(self, tab: str):
         self.tab = tab
         if tab == "native":
             return [
+                mobile.setup_native_listeners(back_button="emit"),
                 mobile.diagnostics(State.on_diagnostics),
                 mobile.bridge_logs(30, State.on_client_logs),
+                mobile.poll_native_events(State.on_native_events),
             ]
 
     @rx.event
@@ -202,6 +209,21 @@ class State(rx.State):
     def run_fs_read(self):
         self._append_server_log(log_bridge("fsRead", source="server"))
         return mobile.fs_read("demo-note.txt", State.on_bridge_result)
+
+    @rx.event
+    def refresh_native_events(self):
+        return mobile.poll_native_events(State.on_native_events)
+
+    @rx.event
+    def on_native_events(self, result):
+        if not result or not isinstance(result, dict):
+            self.native_events = "（暂无原生事件）"
+            return
+        events = result.get("events") or []
+        if not events:
+            self.native_events = "（队列为空 — 切后台/回前台或按 Android 返回键试试）"
+            return
+        self.native_events = json.dumps(events, ensure_ascii=False, indent=2)
 
     @rx.event
     def run_keyboard_hide(self):
@@ -429,8 +451,8 @@ def _native_panel() -> rx.Component:
     return rx.vstack(
         rx.text("Phase 2–3 · 原生桥 + 调试", size="2", color=_MUTED),
         rx.text(
-            "P0 基础能力 + P1（偏好 / 相机 / 定位 / 浏览器 / 沙箱文件）。"
-            "继续用 CI 打 APK 测试；真机热重载（dev）可回家再试。",
+            "P0 基础能力 + P1 + 反向事件（返回键 / 前后台 / 键盘）。"
+            "真机开发可试 reflex-capacitor dev android。",
             size="2",
             color=_MUTED,
         ),
@@ -450,6 +472,13 @@ def _native_panel() -> rx.Component:
                 style={"background": _SURFACE_2, "color": _INK},
             ),
             rx.button(
+                "刷新原生事件",
+                on_click=State.refresh_native_events,
+                size="2",
+                flex="1",
+                style={"background": _SURFACE_2, "color": _INK},
+            ),
+            rx.button(
                 "清空",
                 on_click=State.clear_debug_logs,
                 size="2",
@@ -460,6 +489,7 @@ def _native_panel() -> rx.Component:
             spacing="2",
         ),
         _debug_block("诊断 (WebView)", State.debug_diag),
+        _debug_block("原生事件 (反向)", State.native_events),
         _debug_block("客户端日志 (bridge.js)", State.debug_client_logs),
         _debug_block("服务端日志 (回调到后端)", State.server_logs.join("\n")),
         rx.separator(size="4", color_scheme="gray"),
@@ -571,4 +601,4 @@ app = rx.App(
         scaling="100%",
     ),
 )
-app.add_page(index, route="/", title="Shell")
+app.add_page(index, route="/", title="Shell", on_load=State.on_app_load)
