@@ -44,15 +44,59 @@
         addLog("info", name, { phase: "ok", args: payload, result: result });
         return result;
       } catch (err) {
+        const message = String(err && err.message ? err.message : err);
         addLog("error", name, {
           phase: "error",
           args: payload,
-          error: String(err),
+          error: message,
           stack: err && err.stack ? err.stack : undefined,
         });
-        throw err;
+        return { ok: false, error: message };
       }
     };
+  }
+
+  function isUserCancel(err) {
+    const msg = String(err && err.message ? err.message : err).toLowerCase();
+    return msg.indexOf("cancel") >= 0;
+  }
+
+  function locationGranted(perm) {
+    return (
+      (perm && perm.location === "granted") ||
+      (perm && perm.coarseLocation === "granted")
+    );
+  }
+
+  async function ensureCameraPermission(Cam, saveGallery) {
+    let perm = await Cam.checkPermissions();
+    if (perm.camera !== "granted") {
+      perm = await Cam.requestPermissions({ permissions: ["camera"] });
+      if (perm.camera !== "granted") {
+        return { ok: false, error: "permission_denied", permission: perm };
+      }
+    }
+    if (saveGallery) {
+      perm = await Cam.checkPermissions();
+      if (perm.photos !== "granted") {
+        perm = await Cam.requestPermissions({ permissions: ["photos"] });
+        if (perm.photos !== "granted") {
+          return { ok: false, error: "photos_permission_denied", permission: perm };
+        }
+      }
+    }
+    return { ok: true };
+  }
+
+  async function ensurePhotosPermission(Cam) {
+    let perm = await Cam.checkPermissions();
+    if (perm.photos !== "granted") {
+      perm = await Cam.requestPermissions({ permissions: ["photos"] });
+      if (perm.photos !== "granted") {
+        return { ok: false, error: "permission_denied", permission: perm };
+      }
+    }
+    return { ok: true };
   }
 
   const core = {
@@ -241,79 +285,87 @@
       const Cam = plugin("Camera");
       if (!Cam) return { ok: false, error: "plugin_missing" };
       const saveGallery = !!saveToGallery;
-      let perm = await Cam.checkPermissions();
-      if (perm.camera !== "granted" || perm.photos !== "granted") {
-        perm = await Cam.requestPermissions({ permissions: ["camera", "photos"] });
-        if (perm.camera !== "granted") {
-          return { ok: false, error: "permission_denied", permission: perm };
+      const permResult = await ensureCameraPermission(Cam, saveGallery);
+      if (!permResult.ok) return permResult;
+      const q = Math.max(1, Math.min(Number(quality) || 90, 100));
+      // Uri/webPath is more reliable on Android than loading a huge dataUrl in WebView.
+      const useUri = core.platform() === "android" || saveGallery;
+      try {
+        const photo = await Cam.getPhoto({
+          quality: q,
+          allowEditing: false,
+          resultType: useUri ? "uri" : "dataUrl",
+          source: "CAMERA",
+          saveToGallery: saveGallery,
+        });
+        return {
+          ok: true,
+          dataUrl: photo.dataUrl || "",
+          webPath: photo.webPath || "",
+          path: photo.path || "",
+          format: photo.format || "",
+          saved: !!photo.saved,
+          saveToGallery: saveGallery,
+        };
+      } catch (err) {
+        if (isUserCancel(err)) {
+          return { ok: false, cancelled: true, error: "user_cancelled" };
         }
-        if (saveGallery && perm.photos !== "granted") {
-          return { ok: false, error: "photos_permission_denied", permission: perm };
-        }
+        return { ok: false, error: String(err && err.message ? err.message : err) };
       }
-      // dataUrl: in-memory preview / upload; uri + saveToGallery: persist to system gallery
-      const photo = await Cam.getPhoto({
-        quality: Math.max(1, Math.min(Number(quality) || 90, 100)),
-        allowEditing: false,
-        resultType: saveGallery ? "uri" : "dataUrl",
-        source: "CAMERA",
-        saveToGallery: saveGallery,
-      });
-      return {
-        ok: true,
-        dataUrl: photo.dataUrl || "",
-        webPath: photo.webPath || "",
-        path: photo.path || "",
-        format: photo.format || "",
-        saved: !!photo.saved,
-        saveToGallery: saveGallery,
-      };
     },
 
     async pickImages({ limit, quality }) {
       const Cam = plugin("Camera");
       if (!Cam) return { ok: false, error: "plugin_missing" };
-      let perm = await Cam.checkPermissions();
-      if (perm.photos !== "granted") {
-        perm = await Cam.requestPermissions({ permissions: ["photos"] });
-        if (perm.photos !== "granted") {
-          return { ok: false, error: "permission_denied", permission: perm };
+      const permResult = await ensurePhotosPermission(Cam);
+      if (!permResult.ok) return permResult;
+      try {
+        const result = await Cam.pickImages({
+          quality: Math.max(1, Math.min(Number(quality) || 90, 100)),
+          limit: Math.max(1, Math.min(Number(limit) || 1, 10)),
+        });
+        const photos = (result.photos || []).map(function (p) {
+          return { webPath: p.webPath || "", format: p.format || "" };
+        });
+        return { ok: true, count: photos.length, photos: photos };
+      } catch (err) {
+        if (isUserCancel(err)) {
+          return { ok: false, cancelled: true, error: "user_cancelled", count: 0, photos: [] };
         }
+        return { ok: false, error: String(err && err.message ? err.message : err) };
       }
-      const result = await Cam.pickImages({
-        quality: Math.max(1, Math.min(Number(quality) || 90, 100)),
-        limit: Math.max(1, Math.min(Number(limit) || 1, 10)),
-      });
-      const photos = (result.photos || []).map(function (p) {
-        return { webPath: p.webPath || "", format: p.format || "" };
-      });
-      return { ok: true, count: photos.length, photos: photos };
     },
 
     async getCurrentPosition({ enableHighAccuracy, timeout }) {
       const G = plugin("Geolocation");
       if (!G) return { ok: false, error: "plugin_missing" };
       let perm = await G.checkPermissions();
-      if (perm.location !== "granted" && perm.coarseLocation !== "granted") {
+      if (!locationGranted(perm)) {
         perm = await G.requestPermissions();
-        if (perm.location !== "granted" && perm.coarseLocation !== "granted") {
+        if (!locationGranted(perm)) {
           return { ok: false, error: "permission_denied", permission: perm };
         }
       }
-      const timeoutMs = Math.max(10000, Math.min(Number(timeout) || 45000, 120000));
-      // Indoor / first fix: network (coarse) is much faster than GPS.
+      const timeoutMs = Math.max(8000, Math.min(Number(timeout) || 30000, 120000));
       const attempts =
         enableHighAccuracy === true
-          ? [{ accurate: true, label: "gps" }, { accurate: false, label: "network" }]
-          : [{ accurate: false, label: "network" }, { accurate: true, label: "gps" }];
+          ? [
+              { accurate: true, label: "gps", timeout: Math.min(timeoutMs, 45000) },
+              { accurate: false, label: "network", timeout: Math.min(timeoutMs, 15000) },
+            ]
+          : [
+              { accurate: false, label: "network", timeout: Math.min(timeoutMs, 15000) },
+              { accurate: true, label: "gps", timeout: Math.min(timeoutMs, 45000) },
+            ];
       let lastError = null;
       for (let i = 0; i < attempts.length; i++) {
         const attempt = attempts[i];
         try {
           const pos = await G.getCurrentPosition({
             enableHighAccuracy: attempt.accurate,
-            timeout: timeoutMs,
-            maximumAge: 300000,
+            timeout: attempt.timeout,
+            maximumAge: 60000,
           });
           return {
             ok: true,
@@ -328,7 +380,7 @@
           lastError = err;
           addLog("warn", "getCurrentPosition", {
             attempt: attempt.label,
-            timeout: timeoutMs,
+            timeout: attempt.timeout,
             error: String(err),
           });
         }
@@ -422,9 +474,10 @@
       let photo = null;
       if (src === "camera") {
         photo = await core.takePhoto({ quality: q, saveToGallery: false });
-        if (!photo.ok && photo.error) return photo;
+        if (!photo.ok) return photo;
       } else if (src === "gallery") {
         const picked = await core.pickImages({ limit: 1, quality: q });
+        if (!picked.ok) return picked;
         if (!picked.photos || !picked.photos.length) {
           return { ok: false, cancelled: true };
         }
@@ -432,13 +485,21 @@
       } else {
         const Cam = plugin("Camera");
         if (!Cam) return { ok: false, error: "plugin_missing" };
-        await Cam.requestPermissions({ permissions: ["camera", "photos"] });
-        const raw = await Cam.getPhoto({
-          quality: q,
-          resultType: "dataUrl",
-          source: "PROMPT",
-        });
-        photo = { ok: true, dataUrl: raw.dataUrl, webPath: raw.webPath, format: raw.format };
+        const permResult = await ensureCameraPermission(Cam, false);
+        if (!permResult.ok) return permResult;
+        try {
+          const raw = await Cam.getPhoto({
+            quality: q,
+            resultType: core.platform() === "android" ? "uri" : "dataUrl",
+            source: "PROMPT",
+          });
+          photo = { ok: true, dataUrl: raw.dataUrl, webPath: raw.webPath, format: raw.format };
+        } catch (err) {
+          if (isUserCancel(err)) {
+            return { ok: false, cancelled: true, error: "user_cancelled" };
+          }
+          return { ok: false, error: String(err && err.message ? err.message : err) };
+        }
       }
       return ed.open({
         dataUrl: photo.dataUrl,

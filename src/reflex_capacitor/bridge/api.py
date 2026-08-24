@@ -171,7 +171,7 @@ def get_current_position(
     callback: Any,
     *,
     enable_high_accuracy: bool = False,
-    timeout_ms: int = 45000,
+    timeout_ms: int = 30000,
 ) -> rx.event.EventSpec:
     """Get GPS coordinates; callback receives lat/lon/accuracy.
 

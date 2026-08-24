@@ -149,30 +149,40 @@ class State(rx.State):
     @rx.event
     def run_take_photo(self):
         self._append_server_log(log_bridge("takePhoto", source="server"))
+        self.bridge_msg = "正在打开相机…"
         return mobile.take_photo(State.on_bridge_result, quality=80)
 
     @rx.event
     def run_pick_images(self):
         self._append_server_log(log_bridge("pickImages", source="server"))
+        self.bridge_msg = "正在打开相册…"
         return mobile.pick_images(State.on_bridge_result, limit=3, quality=80)
 
     @rx.event
     def run_geolocation(self):
         self._append_server_log(log_bridge("getCurrentPosition", source="server"))
-        return mobile.get_current_position(
-            State.on_bridge_result,
-            enable_high_accuracy=False,
-            timeout_ms=60000,
-        )
+        self.bridge_msg = "正在定位（网络优先，约 15s）…"
+        return [
+            mobile.toast("正在定位…"),
+            mobile.get_current_position(
+                State.on_bridge_result,
+                enable_high_accuracy=False,
+                timeout_ms=30000,
+            ),
+        ]
 
     @rx.event
     def run_geolocation_gps(self):
         self._append_server_log(log_bridge("getCurrentPosition", args={"gps": True}, source="server"))
-        return mobile.get_current_position(
-            State.on_bridge_result,
-            enable_high_accuracy=True,
-            timeout_ms=90000,
-        )
+        self.bridge_msg = "正在 GPS 定位（可能需要 45s）…"
+        return [
+            mobile.toast("正在 GPS 定位…"),
+            mobile.get_current_position(
+                State.on_bridge_result,
+                enable_high_accuracy=True,
+                timeout_ms=45000,
+            ),
+        ]
 
     @rx.event
     def run_browser(self):
@@ -216,6 +226,10 @@ class State(rx.State):
             self.bridge_msg = "无返回（可能不在 Capacitor 壳内，或 bridge 未加载）。"
             self._append_server_log(log_bridge("callback", error="null", source="client"))
         elif isinstance(result, dict):
+            if result.get("cancelled"):
+                self.bridge_msg = "已取消操作。"
+                self._append_server_log(log_bridge("callback", result={"cancelled": True}, source="client"))
+                return mobile.bridge_logs(30, State.on_client_logs)
             preview = dict(result)
             data_url = preview.get("dataUrl")
             if isinstance(data_url, str) and len(data_url) > 96:
