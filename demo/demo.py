@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
+import json
+import logging
+
 import reflex as rx
+from reflex_capacitor import mobile
+from reflex_capacitor.bridge import log_bridge
+
+logging.getLogger("reflex_capacitor.bridge").setLevel(logging.DEBUG)
 
 # --- visual tokens (mobile shell) ---
 _BG = "#0f1419"
@@ -19,10 +26,113 @@ class State(rx.State):
 
     tab: str = "home"
     count: int = 0
+    bridge_msg: str = "点击下方按钮调用 Capacitor 原生能力（需在壳内运行）。"
+    debug_diag: str = "进入本页或点「刷新诊断」查看 WebView / 插件状态。"
+    debug_client_logs: str = "客户端日志：点原生按钮后点「刷新日志」。"
+    server_logs: list[str] = []
+
+    def _append_server_log(self, line: str) -> None:
+        self.server_logs = [line, *self.server_logs[:49]]
 
     @rx.event
     def set_tab(self, tab: str):
         self.tab = tab
+        if tab == "native":
+            return [
+                mobile.diagnostics(State.on_diagnostics),
+                mobile.bridge_logs(30, State.on_client_logs),
+            ]
+
+    @rx.event
+    def refresh_diagnostics(self):
+        return mobile.diagnostics(State.on_diagnostics)
+
+    @rx.event
+    def refresh_client_logs(self):
+        return mobile.bridge_logs(50, State.on_client_logs)
+
+    @rx.event
+    def clear_debug_logs(self):
+        self.server_logs = []
+        self.debug_client_logs = "（已清空）"
+        self._append_server_log(log_bridge("clear_logs", source="server"))
+        return mobile.clear_logs()
+
+    @rx.event
+    def on_diagnostics(self, result):
+        if result is None:
+            self.debug_diag = "无诊断数据（bridge 未加载？）"
+            self._append_server_log(log_bridge("diagnostics", error="null", source="client"))
+            return
+        self.debug_diag = json.dumps(result, ensure_ascii=False, indent=2)
+        self._append_server_log(log_bridge("diagnostics", result=result, source="client"))
+
+    @rx.event
+    def on_client_logs(self, result):
+        if not result:
+            self.debug_client_logs = "（暂无客户端日志）"
+            return
+        self.debug_client_logs = json.dumps(result, ensure_ascii=False, indent=2)
+        self._append_server_log(
+            log_bridge("bridge_logs", result={"count": len(result)}, source="client")
+        )
+
+    @rx.event
+    def run_notify(self):
+        self._append_server_log(
+            log_bridge("notify", args={"title": "Shell"}, source="server")
+        )
+        return [
+            mobile.notify("Shell", "来自 Reflex 的通知"),
+            mobile.bridge_logs(30, State.on_client_logs),
+        ]
+
+    @rx.event
+    def run_toast(self):
+        self._append_server_log(log_bridge("toast", args={"text": "Hello Toast"}, source="server"))
+        return [
+            mobile.toast("Hello Toast"),
+            mobile.bridge_logs(30, State.on_client_logs),
+        ]
+
+    @rx.event
+    def run_haptics(self):
+        self._append_server_log(log_bridge("hapticsImpact", source="server"))
+        return [
+            mobile.haptics_impact(style="MEDIUM"),
+            mobile.bridge_logs(30, State.on_client_logs),
+        ]
+
+    @rx.event
+    def run_share(self):
+        self._append_server_log(log_bridge("share", source="server"))
+        return [
+            mobile.share(title="Shell", text="reflex-capacitor demo"),
+            mobile.bridge_logs(30, State.on_client_logs),
+        ]
+
+    @rx.event
+    def run_clipboard_write(self):
+        self._append_server_log(log_bridge("clipboardWrite", source="server"))
+        return [
+            mobile.clipboard_write("reflex-capacitor clipboard"),
+            mobile.bridge_logs(30, State.on_client_logs),
+        ]
+
+    @rx.event
+    def run_clipboard_read(self):
+        self._append_server_log(log_bridge("clipboardRead", source="server"))
+        return mobile.clipboard_read(State.on_bridge_result)
+
+    @rx.event
+    def run_device_info(self):
+        self._append_server_log(log_bridge("deviceInfo", source="server"))
+        return mobile.device_info(State.on_bridge_result)
+
+    @rx.event
+    def run_network_status(self):
+        self._append_server_log(log_bridge("networkStatus", source="server"))
+        return mobile.network_status(State.on_bridge_result)
 
     @rx.event
     def increment(self):
@@ -35,6 +145,19 @@ class State(rx.State):
     @rx.event
     def reset_count(self):
         self.count = 0
+
+    @rx.event
+    def on_bridge_result(self, result):
+        if result is None:
+            self.bridge_msg = "无返回（可能不在 Capacitor 壳内，或 bridge 未加载）。"
+            self._append_server_log(log_bridge("callback", error="null", source="client"))
+        elif isinstance(result, dict):
+            self.bridge_msg = json.dumps(result, ensure_ascii=False, indent=2)
+            self._append_server_log(log_bridge("callback", result=result, source="client"))
+        else:
+            self.bridge_msg = str(result)
+            self._append_server_log(log_bridge("callback", result=result, source="client"))
+        return mobile.bridge_logs(30, State.on_client_logs)
 
 
 def _top_bar() -> rx.Component:
@@ -84,6 +207,7 @@ def _bottom_nav() -> rx.Component:
         rx.hstack(
             _nav_item("首页", "house", "home"),
             _nav_item("计数", "gauge", "counter"),
+            _nav_item("原生", "smartphone", "native"),
             _nav_item("我的", "user", "me"),
             width="100%",
             justify="between",
@@ -173,13 +297,104 @@ def _counter_panel() -> rx.Component:
     )
 
 
+def _native_btn(label: str, icon: str, handler) -> rx.Component:
+    return rx.button(
+        rx.hstack(
+            rx.icon(icon, size=18),
+            rx.text(label, size="2"),
+            spacing="2",
+            align="center",
+        ),
+        on_click=handler,
+        size="3",
+        width="100%",
+        style={"background": _SURFACE_2, "color": _INK, "justify_content": "flex-start"},
+    )
+
+
+def _debug_block(title: str, content) -> rx.Component:
+    return rx.box(
+        rx.text(title, size="2", weight="bold", color=_MUTED, margin_bottom="2"),
+        rx.box(
+            rx.text(
+                content,
+                size="1",
+                color=_INK,
+                white_space="pre-wrap",
+                word_break="break-word",
+                font_family="monospace",
+            ),
+            max_height="10rem",
+            overflow_y="auto",
+            width="100%",
+        ),
+        padding="3",
+        border_radius="0.75rem",
+        background=_SURFACE,
+        width="100%",
+    )
+
+
+def _native_panel() -> rx.Component:
+    return rx.vstack(
+        rx.text("Phase 2 · 原生桥 + 调试", size="2", color=_MUTED),
+        rx.text(
+            "壳内测试：点按钮后看下方日志。"
+            "后端终端也会打印 reflex_capacitor.bridge 日志。",
+            size="2",
+            color=_MUTED,
+        ),
+        rx.hstack(
+            rx.button(
+                "刷新诊断",
+                on_click=State.refresh_diagnostics,
+                size="2",
+                flex="1",
+                style={"background": _SURFACE_2, "color": _INK},
+            ),
+            rx.button(
+                "刷新日志",
+                on_click=State.refresh_client_logs,
+                size="2",
+                flex="1",
+                style={"background": _SURFACE_2, "color": _INK},
+            ),
+            rx.button(
+                "清空",
+                on_click=State.clear_debug_logs,
+                size="2",
+                variant="ghost",
+                color_scheme="gray",
+            ),
+            width="100%",
+            spacing="2",
+        ),
+        _debug_block("诊断 (WebView)", State.debug_diag),
+        _debug_block("客户端日志 (bridge.js)", State.debug_client_logs),
+        _debug_block("服务端日志 (回调到后端)", State.server_logs.join("\n")),
+        rx.separator(size="4", color_scheme="gray"),
+        _native_btn("本地通知", "bell", State.run_notify),
+        _native_btn("Toast", "message-square", State.run_toast),
+        _native_btn("触觉反馈", "vibrate", State.run_haptics),
+        _native_btn("分享", "share-2", State.run_share),
+        _native_btn("写入剪贴板", "clipboard-copy", State.run_clipboard_write),
+        _native_btn("读取剪贴板", "clipboard", State.run_clipboard_read),
+        _native_btn("设备信息", "cpu", State.run_device_info),
+        _native_btn("网络状态", "wifi", State.run_network_status),
+        _debug_block("最近一次回调结果", State.bridge_msg),
+        spacing="3",
+        width="100%",
+        padding_y="2",
+    )
+
+
 def _me_panel() -> rx.Component:
     return rx.vstack(
         rx.hstack(
             rx.avatar(fallback="S", size="4", color_scheme="teal"),
             rx.vstack(
                 rx.text("Shell 用户", weight="bold", color=_INK),
-                rx.text("Phase 1 · remote backend", size="2", color=_MUTED),
+                rx.text("Phase 2 · remote + native bridge", size="2", color=_MUTED),
                 spacing="0",
                 align="start",
             ),
@@ -217,7 +432,11 @@ def index() -> rx.Component:
                     rx.cond(
                         State.tab == "counter",
                         _counter_panel(),
-                        _me_panel(),
+                        rx.cond(
+                            State.tab == "native",
+                            _native_panel(),
+                            _me_panel(),
+                        ),
                     ),
                 ),
                 flex="1",

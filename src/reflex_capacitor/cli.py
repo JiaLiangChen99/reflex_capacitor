@@ -107,6 +107,12 @@ def _npm_install(cap_root: Path) -> None:
     _run([_npm_cmd(), "install"], cwd=cap_root)
 
 
+def _finalize_bridge(plugin, cap_root: Path) -> None:
+    """Copy vendor plugin JS into www after npm install (when export has run)."""
+    bridge_js = cap_root / plugin.web_dir / "assets" / "reflex-capacitor" / "bridge.js"
+    if bridge_js.is_file():
+        plugin.finalize_bridge(cap_root)
+
 def _cap_sync(cap_root: Path) -> None:
     """Copy web assets into native projects."""
     _run([*_npx_cmd(), "cap", "sync"], cwd=cap_root)
@@ -184,6 +190,7 @@ def init_cmd(app_dir: str, platforms: tuple[str, ...]) -> None:
         click.echo(f"reflex-capacitor: Capacitor project already exists at {cap_root}")
 
     _npm_install(cap_root)
+    _finalize_bridge(plugin, cap_root)
     for platform in platforms:
         if platform == "ios" and sys.platform != "darwin":
             click.echo(
@@ -239,6 +246,7 @@ def sync(app_dir: str, skip_export: bool, platforms: tuple[str, ...]) -> None:
         )
 
     _npm_install(cap_root)
+    _finalize_bridge(plugin, cap_root)
     for platform in platforms:
         if platform == "ios" and sys.platform != "darwin":
             continue

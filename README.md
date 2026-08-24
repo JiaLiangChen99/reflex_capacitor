@@ -59,7 +59,8 @@ On Windows, **Android** is the practical target; iOS needs macOS.
 - Production: HTTPS API + WSS event endpoint (baked into `env.json` at export time).
 - Emulator → host machine: often `http://10.0.2.2:8000` (Android emulator loopback to host).
 - Physical device: use your PC's LAN IP and open the firewall for the backend port.
-- CI: set `REFLEX_CAPACITOR_DEV_BACKEND_URL` or the workflow input — see [`docs/ci.md`](docs/ci.md).
+- CI：set `REFLEX_CAPACITOR_DEV_BACKEND_URL` or the workflow input — see [`docs/ci.md`](docs/ci.md).
+- 后续阶段待办：[`docs/04-roadmap.md`](docs/04-roadmap.md).
 
 ## CI (no Android Studio on your PC)
 

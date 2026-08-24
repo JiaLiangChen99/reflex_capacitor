@@ -20,6 +20,8 @@ from .config import (
     default_app_id,
     slugify,
 )
+from .bridge.plugins import DEFAULT_PLUGINS, apply_package_json_deps, resolve_plugins
+from .bridge.inject import install_bridge
 
 # Marker so we know this directory was scaffolded by reflex-capacitor.
 _SCAFFOLD_MARKER = ".reflex-capacitor"
@@ -39,6 +41,7 @@ class CapacitorPlugin(Plugin):
         app_id: Reverse-DNS bundle id (e.g. ``com.example.myapp``).
         capacitor_dir: Capacitor project directory relative to the app root.
         web_dir: Folder name inside ``capacitor_dir`` used as Capacitor ``webDir``.
+        plugins: Capacitor plugin short ids (see ``bridge.plugins.PLUGIN_PACKAGES``).
     """
 
     backend_url: str | None = None
@@ -46,6 +49,11 @@ class CapacitorPlugin(Plugin):
     app_id: str | None = None
     capacitor_dir: str = DEFAULT_CAPACITOR_DIR
     web_dir: str = DEFAULT_WEB_DIR
+    plugins: tuple[str, ...] = DEFAULT_PLUGINS
+
+    def _resolved_plugins(self) -> tuple[str, ...]:
+        """Return validated plugin short names."""
+        return resolve_plugins(self.plugins)
 
     def _resolved_names(self) -> tuple[str, str]:
         """Resolve display name and app id from config defaults.
@@ -119,6 +127,9 @@ class CapacitorPlugin(Plugin):
             shutil.rmtree(www)
         shutil.copytree(static_dir, www)
         console.info(f"reflex-capacitor: copied static frontend into {www}")
+
+        install_bridge(www, self._resolved_plugins())
+        console.info("reflex-capacitor: installed bridge.js (vendor scripts copied after npm install)")
 
         self._warn_if_cors_blocks()
 
@@ -217,23 +228,42 @@ class CapacitorPlugin(Plugin):
         )
 
     def _apply_package_json(self, pkg_path: Path, app_name: str) -> None:
-        """Ensure core Capacitor dependencies are declared."""
+        """Ensure core Capacitor + selected plugin npm deps are declared."""
+        apply_package_json_deps(
+            pkg_path,
+            self._resolved_plugins(),
+            capacitor_version=CAPACITOR_VERSION,
+        )
+        # Preserve slug name from app_name when package.json already exists
         if pkg_path.exists():
             pkg = json.loads(pkg_path.read_text(encoding="utf-8"))
-        else:
-            pkg = {
-                "name": slugify(app_name),
-                "version": "0.1.0",
-                "private": True,
-            }
-        pkg["name"] = slugify(app_name)
-        deps = pkg.setdefault("dependencies", {})
-        dev_deps = pkg.setdefault("devDependencies", {})
-        deps["@capacitor/core"] = CAPACITOR_VERSION
-        deps["@capacitor/android"] = CAPACITOR_VERSION
-        deps["@capacitor/ios"] = CAPACITOR_VERSION
-        dev_deps["@capacitor/cli"] = CAPACITOR_VERSION
-        pkg_path.write_text(json.dumps(pkg, indent=2) + "\n", encoding="utf-8")
+            pkg["name"] = slugify(app_name)
+            pkg_path.write_text(json.dumps(pkg, indent=2) + "\n", encoding="utf-8")
+
+    def finalize_bridge(self, project_root: Path | None = None) -> None:
+        """Copy Capacitor vendor JS into www and patch Android permissions.
+
+        Call after ``npm install`` in the Capacitor project (CLI ``sync`` does this).
+
+        Args:
+            project_root: Capacitor project root; defaults to ``capacitor_dir`` under cwd.
+        """
+        from reflex_base.utils import console
+
+        from .bridge.plugins import copy_vendor_scripts, ensure_android_notification_permission
+
+        root = (project_root or (Path.cwd() / self.capacitor_dir)).resolve()
+        www = root / self.web_dir
+        if not www.is_dir():
+            msg = f"reflex-capacitor: www dir missing at {www} — run export/sync first"
+            raise FileNotFoundError(msg)
+
+        copy_vendor_scripts(root, www, self._resolved_plugins())
+        console.info(f"reflex-capacitor: copied Capacitor vendor scripts into {www / 'assets'}")
+
+        manifest = root / "android" / "app" / "src" / "main" / "AndroidManifest.xml"
+        if "local-notifications" in self._resolved_plugins():
+            ensure_android_notification_permission(manifest)
 
     def _write_gitignore(self, project_root: Path) -> None:
         """Write a .gitignore for Capacitor build artifacts."""

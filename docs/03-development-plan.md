@@ -103,7 +103,9 @@
 4. [x] CORS 警告  
 5. [x] `demo/` 最小计数器 + `CapacitorPlugin`  
 
-**验收**：`reflex-capacitor sync` 产出 `capacitor/www` + `android/`；配置 `backend_url` 后 `run android` 连远程后端。
+**验收**：`reflex-capacitor sync` 产出 `capacitor/www` + `android/`；配置 `backend_url` 后真机连远程后端。（已于 2026-08-24 验证通过。）
+
+> 后续 Phase 2–4 详细待办见 **[04-roadmap.md](04-roadmap.md)**。
 
 ### Phase 2 — 原生桥 P0
 
