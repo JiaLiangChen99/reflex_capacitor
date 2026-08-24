@@ -156,12 +156,14 @@ def ensure_android_vibrate_permission(manifest_path) -> None:
 
 
 def ensure_android_camera_permissions(manifest_path) -> None:
-    """Add camera / gallery permissions for @capacitor/camera."""
+    """Add camera / gallery permissions for @capacitor/camera (incl. saveToGallery)."""
     ensure_android_permissions(
         manifest_path,
         (
             "android.permission.CAMERA",
             "android.permission.READ_MEDIA_IMAGES",
+            "android.permission.READ_EXTERNAL_STORAGE",
+            "android.permission.WRITE_EXTERNAL_STORAGE",
         ),
     )
 

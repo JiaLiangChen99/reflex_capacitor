@@ -141,9 +141,25 @@ def pref_get(key: str, callback: Any) -> rx.event.EventSpec:
     return call_bridge("prefGet", {"key": key}, callback=callback)
 
 
-def take_photo(callback: Any, *, quality: int = 90) -> rx.event.EventSpec:
-    """Capture a photo; callback receives ``{dataUrl, format}`` (not a file path)."""
-    return call_bridge("takePhoto", {"quality": quality}, callback=callback)
+def take_photo(
+    callback: Any,
+    *,
+    quality: int = 90,
+    save_to_gallery: bool = False,
+) -> rx.event.EventSpec:
+    """Capture a photo.
+
+    Callback receives ``{dataUrl, webPath, format, saved, ...}``.
+
+    By default the image stays in memory as ``dataUrl`` (no cloud, not saved to disk).
+    Set ``save_to_gallery=True`` to also write into the system photo gallery on
+    Android/iOS (local only, no upload).
+    """
+    return call_bridge(
+        "takePhoto",
+        {"quality": quality, "saveToGallery": save_to_gallery},
+        callback=callback,
+    )
 
 
 def pick_images(callback: Any, *, limit: int = 1, quality: int = 90) -> rx.event.EventSpec:
@@ -151,11 +167,20 @@ def pick_images(callback: Any, *, limit: int = 1, quality: int = 90) -> rx.event
     return call_bridge("pickImages", {"limit": limit, "quality": quality}, callback=callback)
 
 
-def get_current_position(callback: Any, *, enable_high_accuracy: bool = True) -> rx.event.EventSpec:
-    """Get GPS coordinates; callback receives lat/lon/accuracy."""
+def get_current_position(
+    callback: Any,
+    *,
+    enable_high_accuracy: bool = False,
+    timeout_ms: int = 45000,
+) -> rx.event.EventSpec:
+    """Get GPS coordinates; callback receives lat/lon/accuracy.
+
+    Defaults to network/coarse first (faster indoors). Set ``enable_high_accuracy=True``
+    to prefer GPS (slower, needs clear sky).
+    """
     return call_bridge(
         "getCurrentPosition",
-        {"enableHighAccuracy": enable_high_accuracy},
+        {"enableHighAccuracy": enable_high_accuracy, "timeout": timeout_ms},
         callback=callback,
     )
 
@@ -204,3 +229,65 @@ def invoke(
         {"plugin": plugin, "method": method, "args": args or {}},
         callback=callback,
     )
+
+
+def editor_options(
+    *,
+    enable_crop: bool = True,
+    enable_rotate: bool = True,
+    enable_compress: bool = True,
+    enable_watermark: bool = False,
+    watermark_text: str = "",
+    max_width: int = 1920,
+    quality: int = 85,
+    aspect_ratio: float | None = None,
+    save_to_sandbox: bool = False,
+    sandbox_path: str = "edited/photo.jpg",
+    return_data_url: bool = True,
+) -> dict[str, Any]:
+    """Build editor option dict for :func:`capture_and_edit` / :func:`edit_image`."""
+    from reflex_capacitor.components.image_editor import ImageEditorOptions
+
+    return ImageEditorOptions(
+        enable_crop=enable_crop,
+        enable_rotate=enable_rotate,
+        enable_compress=enable_compress,
+        enable_watermark=enable_watermark,
+        watermark_text=watermark_text,
+        max_width=max_width,
+        quality=quality,
+        aspect_ratio=aspect_ratio,
+        save_to_sandbox=save_to_sandbox,
+        sandbox_path=sandbox_path,
+        return_data_url=return_data_url,
+    ).to_bridge()
+
+
+def capture_and_edit(
+    callback: Any,
+    *,
+    source: Literal["prompt", "camera", "gallery"] = "prompt",
+    editor: dict[str, Any] | None = None,
+) -> rx.event.EventSpec:
+    """Pick/capture an image then open the built-in editor (device-local processing)."""
+    return call_bridge(
+        "captureAndEdit",
+        {"source": source, "editor": editor or editor_options()},
+        callback=callback,
+    )
+
+
+def edit_image(
+    callback: Any,
+    *,
+    data_url: str | None = None,
+    web_path: str | None = None,
+    editor: dict[str, Any] | None = None,
+) -> rx.event.EventSpec:
+    """Open the built-in editor for an existing ``dataUrl`` or Capacitor ``webPath``."""
+    args: dict[str, Any] = {"editor": editor or editor_options()}
+    if data_url is not None:
+        args["dataUrl"] = data_url
+    if web_path is not None:
+        args["webPath"] = web_path
+    return call_bridge("editImage", args, callback=callback)

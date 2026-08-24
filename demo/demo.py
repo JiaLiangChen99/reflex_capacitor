@@ -159,7 +159,20 @@ class State(rx.State):
     @rx.event
     def run_geolocation(self):
         self._append_server_log(log_bridge("getCurrentPosition", source="server"))
-        return mobile.get_current_position(State.on_bridge_result)
+        return mobile.get_current_position(
+            State.on_bridge_result,
+            enable_high_accuracy=False,
+            timeout_ms=60000,
+        )
+
+    @rx.event
+    def run_geolocation_gps(self):
+        self._append_server_log(log_bridge("getCurrentPosition", args={"gps": True}, source="server"))
+        return mobile.get_current_position(
+            State.on_bridge_result,
+            enable_high_accuracy=True,
+            timeout_ms=90000,
+        )
 
     @rx.event
     def run_browser(self):
@@ -451,7 +464,8 @@ def _native_panel() -> rx.Component:
         _native_btn("读取偏好 shell_demo", "bookmark-check", State.run_pref_get),
         _native_btn("拍照 (dataUrl)", "camera", State.run_take_photo),
         _native_btn("相册选图", "images", State.run_pick_images),
-        _native_btn("当前定位", "map-pin", State.run_geolocation),
+        _native_btn("当前定位 (网络)", "map-pin", State.run_geolocation),
+        _native_btn("高精度 GPS", "navigation", State.run_geolocation_gps),
         _native_btn("打开 reflex.dev", "globe", State.run_browser),
         _native_btn("沙箱写文件", "file-plus", State.run_fs_write),
         _native_btn("沙箱读文件", "file-text", State.run_fs_read),

@@ -237,23 +237,37 @@
       return { ok: true, key: key, value: result && result.value != null ? result.value : "" };
     },
 
-    async takePhoto({ quality }) {
+    async takePhoto({ quality, saveToGallery }) {
       const Cam = plugin("Camera");
       if (!Cam) return { ok: false, error: "plugin_missing" };
+      const saveGallery = !!saveToGallery;
       let perm = await Cam.checkPermissions();
       if (perm.camera !== "granted" || perm.photos !== "granted") {
         perm = await Cam.requestPermissions({ permissions: ["camera", "photos"] });
         if (perm.camera !== "granted") {
           return { ok: false, error: "permission_denied", permission: perm };
         }
+        if (saveGallery && perm.photos !== "granted") {
+          return { ok: false, error: "photos_permission_denied", permission: perm };
+        }
       }
+      // dataUrl: in-memory preview / upload; uri + saveToGallery: persist to system gallery
       const photo = await Cam.getPhoto({
         quality: Math.max(1, Math.min(Number(quality) || 90, 100)),
         allowEditing: false,
-        resultType: "dataUrl",
+        resultType: saveGallery ? "uri" : "dataUrl",
         source: "CAMERA",
+        saveToGallery: saveGallery,
       });
-      return { ok: true, dataUrl: photo.dataUrl || "", format: photo.format || "" };
+      return {
+        ok: true,
+        dataUrl: photo.dataUrl || "",
+        webPath: photo.webPath || "",
+        path: photo.path || "",
+        format: photo.format || "",
+        saved: !!photo.saved,
+        saveToGallery: saveGallery,
+      };
     },
 
     async pickImages({ limit, quality }) {
@@ -276,27 +290,56 @@
       return { ok: true, count: photos.length, photos: photos };
     },
 
-    async getCurrentPosition({ enableHighAccuracy }) {
+    async getCurrentPosition({ enableHighAccuracy, timeout }) {
       const G = plugin("Geolocation");
       if (!G) return { ok: false, error: "plugin_missing" };
       let perm = await G.checkPermissions();
-      if (perm.location !== "granted") {
+      if (perm.location !== "granted" && perm.coarseLocation !== "granted") {
         perm = await G.requestPermissions();
-        if (perm.location !== "granted") {
+        if (perm.location !== "granted" && perm.coarseLocation !== "granted") {
           return { ok: false, error: "permission_denied", permission: perm };
         }
       }
-      const pos = await G.getCurrentPosition({
-        enableHighAccuracy: enableHighAccuracy !== false,
-        timeout: 15000,
-      });
+      const timeoutMs = Math.max(10000, Math.min(Number(timeout) || 45000, 120000));
+      // Indoor / first fix: network (coarse) is much faster than GPS.
+      const attempts =
+        enableHighAccuracy === true
+          ? [{ accurate: true, label: "gps" }, { accurate: false, label: "network" }]
+          : [{ accurate: false, label: "network" }, { accurate: true, label: "gps" }];
+      let lastError = null;
+      for (let i = 0; i < attempts.length; i++) {
+        const attempt = attempts[i];
+        try {
+          const pos = await G.getCurrentPosition({
+            enableHighAccuracy: attempt.accurate,
+            timeout: timeoutMs,
+            maximumAge: 300000,
+          });
+          return {
+            ok: true,
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+            accuracy: pos.coords.accuracy,
+            altitude: pos.coords.altitude,
+            timestamp: pos.timestamp,
+            source: attempt.label,
+          };
+        } catch (err) {
+          lastError = err;
+          addLog("warn", "getCurrentPosition", {
+            attempt: attempt.label,
+            timeout: timeoutMs,
+            error: String(err),
+          });
+        }
+      }
       return {
-        ok: true,
-        latitude: pos.coords.latitude,
-        longitude: pos.coords.longitude,
-        accuracy: pos.coords.accuracy,
-        altitude: pos.coords.altitude,
-        timestamp: pos.timestamp,
+        ok: false,
+        error: "location_timeout",
+        message: lastError ? String(lastError) : "unknown",
+        hint:
+          "已授权但仍超时：请确认系统「定位/GPS」已开启；室内先试网络定位，或到窗边/室外再试。",
+        timeout: timeoutMs,
       };
     },
 
@@ -327,14 +370,14 @@
       return { ok: true };
     },
 
-    async fsWrite({ path, data, directory }) {
+    async fsWrite({ path, data, directory, encoding }) {
       const FS = plugin("Filesystem");
       if (!FS) return { ok: false, error: "plugin_missing" };
       await FS.writeFile({
         path: path || "reflex-capacitor.txt",
         data: data || "",
         directory: directory || "DATA",
-        encoding: "utf8",
+        encoding: encoding || "utf8",
       });
       return { ok: true, path: path, directory: directory || "DATA" };
     },
@@ -362,6 +405,46 @@
       }
       const result = await P[method](args || {});
       return { ok: true, result: result };
+    },
+
+    async editImage({ dataUrl, webPath, editor }) {
+      const ed = window.__REFLEX_CAPACITOR_IMAGE_EDITOR__;
+      if (!ed) return { ok: false, error: "image_editor_not_loaded" };
+      return ed.open({ dataUrl: dataUrl, webPath: webPath, editor: editor || {} });
+    },
+
+    async captureAndEdit({ source, editor }) {
+      const ed = window.__REFLEX_CAPACITOR_IMAGE_EDITOR__;
+      if (!ed) return { ok: false, error: "image_editor_not_loaded" };
+      const src = source || "prompt";
+      const edOpts = editor || {};
+      const q = Math.round((Number(edOpts.quality) || 0.85) * 100);
+      let photo = null;
+      if (src === "camera") {
+        photo = await core.takePhoto({ quality: q, saveToGallery: false });
+        if (!photo.ok && photo.error) return photo;
+      } else if (src === "gallery") {
+        const picked = await core.pickImages({ limit: 1, quality: q });
+        if (!picked.photos || !picked.photos.length) {
+          return { ok: false, cancelled: true };
+        }
+        photo = { ok: true, webPath: picked.photos[0].webPath, format: picked.photos[0].format };
+      } else {
+        const Cam = plugin("Camera");
+        if (!Cam) return { ok: false, error: "plugin_missing" };
+        await Cam.requestPermissions({ permissions: ["camera", "photos"] });
+        const raw = await Cam.getPhoto({
+          quality: q,
+          resultType: "dataUrl",
+          source: "PROMPT",
+        });
+        photo = { ok: true, dataUrl: raw.dataUrl, webPath: raw.webPath, format: raw.format };
+      }
+      return ed.open({
+        dataUrl: photo.dataUrl,
+        webPath: photo.webPath,
+        editor: edOpts,
+      });
     },
   };
 

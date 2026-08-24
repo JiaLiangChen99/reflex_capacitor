@@ -50,6 +50,8 @@ def test_install_bridge_copies_js_and_injects(tmp_path: Path):
     install_bridge(www, ("app",))
 
     assert (www / "assets" / "reflex-capacitor" / "bridge.js").is_file()
+    assert (www / "assets" / "reflex-capacitor" / "image-editor.js").is_file()
     html = (www / "index.html").read_text(encoding="utf-8")
     assert _BRIDGE_BEGIN in html
+    assert "image-editor.js" in html
     assert "app.plugin.js" in html

@@ -12,7 +12,9 @@ _BRIDGE_BEGIN = "<!-- reflex-capacitor bridge begin -->"
 _BRIDGE_END = "<!-- reflex-capacitor bridge end -->"
 _ASSETS_DIR = Path(__file__).resolve().parent / "assets"
 _BRIDGE_JS = "bridge.js"
+_IMAGE_EDITOR_JS = "image-editor.js"
 _WWW_BRIDGE = Path("assets") / "reflex-capacitor" / _BRIDGE_JS
+_WWW_IMAGE_EDITOR = Path("assets") / "reflex-capacitor" / _IMAGE_EDITOR_JS
 _VENDOR_PREFIX = "./assets/reflex-capacitor/vendor/"
 
 
@@ -22,14 +24,15 @@ def bridge_asset_dir() -> Path:
 
 
 def copy_bridge_js(www_dir: Path) -> None:
-    """Copy bridge.js from the package into www/assets/reflex-capacitor/."""
+    """Copy bridge assets from the package into www/assets/reflex-capacitor/."""
     dest_dir = www_dir / "assets" / "reflex-capacitor"
     dest_dir.mkdir(parents=True, exist_ok=True)
-    src = _ASSETS_DIR / _BRIDGE_JS
-    if not src.is_file():
-        msg = f"reflex-capacitor: missing bridge asset at {src}"
-        raise FileNotFoundError(msg)
-    shutil.copyfile(src, dest_dir / _BRIDGE_JS)
+    for name in (_BRIDGE_JS, _IMAGE_EDITOR_JS):
+        src = _ASSETS_DIR / name
+        if not src.is_file():
+            msg = f"reflex-capacitor: missing bridge asset at {src}"
+            raise FileNotFoundError(msg)
+        shutil.copyfile(src, dest_dir / name)
 
 
 def build_bridge_snippet(plugins: tuple[str, ...]) -> str:
@@ -39,6 +42,7 @@ def build_bridge_snippet(plugins: tuple[str, ...]) -> str:
     for short in plugins:
         vendor_file = PLUGIN_VENDOR_FILE[short]
         lines.append(f'    <script src="{_VENDOR_PREFIX}{vendor_file}"></script>')
+    lines.append(f'    <script src="./{_WWW_IMAGE_EDITOR.as_posix()}"></script>')
     lines.append(f'    <script src="./{_WWW_BRIDGE.as_posix()}"></script>')
     lines.append(f"    {_BRIDGE_END}")
     return "\n".join(lines) + "\n"
