@@ -11,7 +11,7 @@ from reflex_capacitor.bridge.inject import (
     inject_index_html,
     install_bridge,
 )
-from reflex_capacitor.bridge.plugins import DEFAULT_PLUGINS
+from reflex_capacitor.bridge.plugins import CORE_PLUGIN_IDS
 
 
 def test_build_bridge_snippet_includes_marker_and_bridge_js():
@@ -36,7 +36,7 @@ def test_inject_index_html_idempotent(tmp_path: Path):
     assert first.count(_BRIDGE_BEGIN) == 1
     assert "toast.plugin.js" in first
 
-    inject_index_html(www, DEFAULT_PLUGINS[:3])
+    inject_index_html(www, CORE_PLUGIN_IDS[:3])
     second = index.read_text(encoding="utf-8")
     assert second.count(_BRIDGE_BEGIN) == 1
     assert "local-notifications.plugin.js" in second

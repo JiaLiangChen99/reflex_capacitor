@@ -50,12 +50,12 @@ def test_apply_capacitor_config_https_no_cleartext(tmp_path: Path):
     assert conf["server"]["androidScheme"] == "https"
 
 
-def test_demo_plugins_include_p1():
-    from reflex_capacitor.bridge.plugins import DEFAULT_PLUGINS, DEMO_PLUGINS, P1_PLUGINS
+def test_all_plugin_ids_include_core_and_extended():
+    from reflex_capacitor.bridge.plugins import ALL_PLUGIN_IDS, CORE_PLUGIN_IDS, EXTENDED_PLUGIN_IDS
 
-    assert all(p in DEMO_PLUGINS for p in DEFAULT_PLUGINS)
-    assert all(p in DEMO_PLUGINS for p in P1_PLUGINS)
-    assert "camera" in DEMO_PLUGINS
+    assert all(p in ALL_PLUGIN_IDS for p in CORE_PLUGIN_IDS)
+    assert all(p in ALL_PLUGIN_IDS for p in EXTENDED_PLUGIN_IDS)
+    assert "camera" in ALL_PLUGIN_IDS
 
 
 def test_apply_dev_server_sets_url(tmp_path: Path):
@@ -90,11 +90,11 @@ def test_guess_lan_ip_returns_string():
     assert ip.count(".") == 3
 
 
-def test_scaffold_package_json_lists_demo_plugins(tmp_path: Path, monkeypatch):
-    from reflex_capacitor.bridge.plugins import DEMO_PLUGINS
+def test_scaffold_package_json_lists_all_plugins(tmp_path: Path, monkeypatch):
+    from reflex_capacitor.bridge.plugins import ALL_PLUGIN_IDS
 
     monkeypatch.chdir(tmp_path)
-    plugin = CapacitorPlugin(plugins=DEMO_PLUGINS)
+    plugin = CapacitorPlugin(plugins=ALL_PLUGIN_IDS)
     cap_root = tmp_path / "capacitor"
     plugin._scaffold(cap_root)
     plugin._configure(cap_root)

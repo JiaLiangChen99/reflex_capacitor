@@ -6,7 +6,7 @@ import re
 import shutil
 from pathlib import Path
 
-from .plugins import PLUGIN_VENDOR_FILE
+from .plugins import vendor_script_filename
 
 _BRIDGE_BEGIN = "<!-- reflex-capacitor bridge begin -->"
 _BRIDGE_END = "<!-- reflex-capacitor bridge end -->"
@@ -39,9 +39,10 @@ def build_bridge_snippet(plugins: tuple[str, ...]) -> str:
     """Build HTML script tags for Capacitor core, plugins, and the bridge."""
     lines = [_BRIDGE_BEGIN]
     lines.append(f'    <script src="{_VENDOR_PREFIX}capacitor.js"></script>')
-    for short in plugins:
-        vendor_file = PLUGIN_VENDOR_FILE[short]
-        lines.append(f'    <script src="{_VENDOR_PREFIX}{vendor_file}"></script>')
+    for plugin_id in plugins:
+        lines.append(
+            f'    <script src="{_VENDOR_PREFIX}{vendor_script_filename(plugin_id)}"></script>'
+        )
     lines.append(f'    <script src="./{_WWW_IMAGE_EDITOR.as_posix()}"></script>')
     lines.append(f'    <script src="./{_WWW_BRIDGE.as_posix()}"></script>')
     lines.append(f"    {_BRIDGE_END}")

@@ -6,27 +6,29 @@ from . import api
 from .inject import install_bridge
 from .log import log_bridge
 from .plugins import (
-    DEFAULT_PLUGINS,
-    DEMO_PLUGINS,
-    P1_PLUGINS,
-    PLUGIN_PACKAGES,
+    ALL_PLUGIN_IDS,
+    CAPACITOR_PLUGIN_PACKAGES,
+    CORE_PLUGIN_IDS,
+    EXTENDED_PLUGIN_IDS,
     apply_package_json_deps,
-    copy_vendor_scripts,
+    copy_plugin_vendor_scripts,
     ensure_android_notification_permission,
-    resolve_plugins,
+    resolve_plugin_ids,
+    vendor_script_filename,
 )
 
 __all__ = [
-    "DEFAULT_PLUGINS",
-    "DEMO_PLUGINS",
-    "P1_PLUGINS",
-    "PLUGIN_PACKAGES",
+    "ALL_PLUGIN_IDS",
+    "CAPACITOR_PLUGIN_PACKAGES",
+    "CORE_PLUGIN_IDS",
+    "EXTENDED_PLUGIN_IDS",
     "api",
     "mobile",
     "install_bridge",
     "log_bridge",
     "apply_package_json_deps",
-    "copy_vendor_scripts",
+    "copy_plugin_vendor_scripts",
     "ensure_android_notification_permission",
-    "resolve_plugins",
+    "resolve_plugin_ids",
+    "vendor_script_filename",
 ]

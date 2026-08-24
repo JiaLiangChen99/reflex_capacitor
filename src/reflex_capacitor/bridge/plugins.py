@@ -1,11 +1,18 @@
-"""Capacitor npm package names keyed by short plugin id."""
+"""Capacitor plugin registry, npm dependency wiring, and Android permission helpers."""
 
 from __future__ import annotations
 
-from reflex_capacitor.config import CAPACITOR_VERSION
+import json
+import shutil
+from pathlib import Path
+from typing import Final, TypeAlias
 
-# Short id (used in CapacitorPlugin.plugins) → npm package name.
-PLUGIN_PACKAGES: dict[str, str] = {
+from reflex_capacitor.config import slugify
+
+PluginId: TypeAlias = str
+
+# Short plugin id (CapacitorPlugin.plugins) → @capacitor/* npm package name.
+CAPACITOR_PLUGIN_PACKAGES: Final[dict[PluginId, str]] = {
     "local-notifications": "@capacitor/local-notifications",
     "clipboard": "@capacitor/clipboard",
     "haptics": "@capacitor/haptics",
@@ -25,8 +32,8 @@ PLUGIN_PACKAGES: dict[str, str] = {
     "push-notifications": "@capacitor/push-notifications",
 }
 
-# P0 defaults for Phase 2 (see docs/02-native-bridge.md).
-DEFAULT_PLUGINS: tuple[str, ...] = (
+# Bundled with every app unless CapacitorPlugin.plugins overrides the tuple.
+CORE_PLUGIN_IDS: Final[tuple[PluginId, ...]] = (
     "local-notifications",
     "clipboard",
     "haptics",
@@ -39,8 +46,8 @@ DEFAULT_PLUGINS: tuple[str, ...] = (
     "network",
 )
 
-# Demo / Phase 3 P1 extras (enable in rxconfig CapacitorPlugin.plugins=).
-P1_PLUGINS: tuple[str, ...] = (
+# Optional plugins — camera, storage, location, etc.
+EXTENDED_PLUGIN_IDS: Final[tuple[PluginId, ...]] = (
     "preferences",
     "camera",
     "geolocation",
@@ -49,167 +56,198 @@ P1_PLUGINS: tuple[str, ...] = (
     "filesystem",
 )
 
-DEMO_PLUGINS: tuple[str, ...] = DEFAULT_PLUGINS + P1_PLUGINS
+# Core + extended; used by the repo demo (rxconfig.py).
+ALL_PLUGIN_IDS: Final[tuple[PluginId, ...]] = CORE_PLUGIN_IDS + EXTENDED_PLUGIN_IDS
 
-# Vendor script filename stem (plugin.js copies) per short id.
-PLUGIN_VENDOR_FILE: dict[str, str] = {
-    short: pkg.rsplit("/", 1)[-1] + ".plugin.js" for short, pkg in PLUGIN_PACKAGES.items()
-}
+_ANDROID_PERMISSION_POST_NOTIFICATIONS: Final = "android.permission.POST_NOTIFICATIONS"
+_ANDROID_PERMISSION_VIBRATE: Final = "android.permission.VIBRATE"
+_ANDROID_PERMISSION_CAMERA: Final = "android.permission.CAMERA"
+_ANDROID_PERMISSION_READ_MEDIA_IMAGES: Final = "android.permission.READ_MEDIA_IMAGES"
+_ANDROID_PERMISSION_READ_EXTERNAL_STORAGE: Final = "android.permission.READ_EXTERNAL_STORAGE"
+_ANDROID_PERMISSION_WRITE_EXTERNAL_STORAGE: Final = "android.permission.WRITE_EXTERNAL_STORAGE"
+_ANDROID_PERMISSION_FINE_LOCATION: Final = "android.permission.ACCESS_FINE_LOCATION"
+_ANDROID_PERMISSION_COARSE_LOCATION: Final = "android.permission.ACCESS_COARSE_LOCATION"
+
+__all__ = [
+    "ALL_PLUGIN_IDS",
+    "CAPACITOR_PLUGIN_PACKAGES",
+    "CORE_PLUGIN_IDS",
+    "EXTENDED_PLUGIN_IDS",
+    "PluginId",
+    "apply_package_json_deps",
+    "copy_plugin_vendor_scripts",
+    "ensure_android_camera_permissions",
+    "ensure_android_location_permissions",
+    "ensure_android_notification_permission",
+    "ensure_android_permissions",
+    "ensure_android_vibrate_permission",
+    "resolve_plugin_ids",
+    "vendor_script_filename",
+]
 
 
-def resolve_plugins(plugins: tuple[str, ...]) -> tuple[str, ...]:
+def vendor_script_filename(plugin_id: PluginId) -> str:
+    """Return the vendor JS filename copied into ``www/assets/reflex-capacitor/vendor/``."""
+    package_name = CAPACITOR_PLUGIN_PACKAGES[plugin_id].rsplit("/", maxsplit=1)[-1]
+    return f"{package_name}.plugin.js"
+
+
+def resolve_plugin_ids(plugin_ids: tuple[PluginId, ...]) -> tuple[PluginId, ...]:
     """Validate plugin short names.
 
     Args:
-        plugins: Tuple of short plugin ids.
+        plugin_ids: Tuple of Capacitor plugin short ids.
 
     Returns:
-        The same tuple if every id is known.
+        The same tuple when every id is registered.
 
     Raises:
         ValueError: If an unknown plugin id is requested.
     """
-    unknown = [p for p in plugins if p not in PLUGIN_PACKAGES]
+    unknown = [pid for pid in plugin_ids if pid not in CAPACITOR_PLUGIN_PACKAGES]
     if unknown:
-        msg = f"reflex-capacitor: unknown plugin(s) {unknown!r}; known: {sorted(PLUGIN_PACKAGES)}"
+        known = sorted(CAPACITOR_PLUGIN_PACKAGES)
+        msg = f"reflex-capacitor: unknown plugin(s) {unknown!r}; known: {known}"
         raise ValueError(msg)
-    return plugins
+    return plugin_ids
 
 
-def apply_package_json_deps(pkg_path, plugins: tuple[str, ...], *, capacitor_version: str) -> None:
-    """Merge Capacitor core + selected plugin npm deps into package.json.
+def apply_package_json_deps(
+    package_json_path: Path | str,
+    plugin_ids: tuple[PluginId, ...],
+    *,
+    capacitor_version: str,
+) -> None:
+    """Merge Capacitor core and selected plugin npm deps into ``package.json``.
 
     Args:
-        pkg_path: Path to capacitor/package.json.
-        plugins: Short plugin ids to install.
-        capacitor_version: Semver range for @capacitor/* packages.
+        package_json_path: Path to ``capacitor/package.json``.
+        plugin_ids: Plugin short ids to install.
+        capacitor_version: Semver range for ``@capacitor/*`` packages.
     """
-    import json
-    from pathlib import Path
-
-    from reflex_capacitor.config import slugify
-
-    path = Path(pkg_path)
-    if path.exists():
-        pkg = json.loads(path.read_text(encoding="utf-8"))
+    path = Path(package_json_path)
+    if path.is_file():
+        package = json.loads(path.read_text(encoding="utf-8"))
     else:
-        pkg = {"name": "reflex-capacitor-app", "version": "0.1.0", "private": True}
+        package = {"name": "reflex-capacitor-app", "version": "0.1.0", "private": True}
 
-    deps = pkg.setdefault("dependencies", {})
-    dev_deps = pkg.setdefault("devDependencies", {})
-    deps["@capacitor/core"] = capacitor_version
-    deps["@capacitor/android"] = capacitor_version
-    deps["@capacitor/ios"] = capacitor_version
-    dev_deps["@capacitor/cli"] = capacitor_version
+    dependencies = package.setdefault("dependencies", {})
+    dev_dependencies = package.setdefault("devDependencies", {})
+    dependencies["@capacitor/core"] = capacitor_version
+    dependencies["@capacitor/android"] = capacitor_version
+    dependencies["@capacitor/ios"] = capacitor_version
+    dev_dependencies["@capacitor/cli"] = capacitor_version
 
-    for short in plugins:
-        deps[PLUGIN_PACKAGES[short]] = capacitor_version
+    for plugin_id in plugin_ids:
+        dependencies[CAPACITOR_PLUGIN_PACKAGES[plugin_id]] = capacitor_version
 
-    if "name" not in pkg or pkg["name"] == "reflex-capacitor-app":
-        pkg["name"] = slugify(pkg.get("name", "reflex-capacitor-app"))
+    if package.get("name") in (None, "reflex-capacitor-app"):
+        package["name"] = slugify(str(package.get("name", "reflex-capacitor-app")))
 
-    path.write_text(json.dumps(pkg, indent=2) + "\n", encoding="utf-8")
+    path.write_text(json.dumps(package, indent=2) + "\n", encoding="utf-8")
 
 
-def copy_vendor_scripts(cap_root, www_dir, plugins: tuple[str, ...]) -> None:
-    """Copy capacitor.js + plugin.js bundles into www for the static bridge.
+def copy_plugin_vendor_scripts(
+    capacitor_root: Path | str,
+    web_root: Path | str,
+    plugin_ids: tuple[PluginId, ...],
+) -> None:
+    """Copy ``capacitor.js`` and plugin bundles into the static export tree.
 
-    Must run after ``npm install`` in ``cap_root`` so node_modules exists.
+    Must run after ``npm install`` in ``capacitor_root`` so ``node_modules`` exists.
 
     Args:
-        cap_root: Capacitor project root (holds node_modules/).
-        www_dir: Reflex static export directory inside the Cap project.
-        plugins: Short plugin ids to copy.
+        capacitor_root: Capacitor project root (contains ``node_modules/``).
+        web_root: Reflex static export directory (Capacitor ``webDir``).
+        plugin_ids: Plugin short ids whose ``plugin.js`` files should be copied.
     """
-    import shutil
-    from pathlib import Path
-
-    cap_root = Path(cap_root).resolve()
-    www_dir = Path(www_dir).resolve()
-    vendor = www_dir / "assets" / "reflex-capacitor" / "vendor"
-    vendor.mkdir(parents=True, exist_ok=True)
+    cap_root = Path(capacitor_root).resolve()
+    www_dir = Path(web_root).resolve()
+    vendor_dir = www_dir / "assets" / "reflex-capacitor" / "vendor"
+    vendor_dir.mkdir(parents=True, exist_ok=True)
 
     core_js = cap_root / "node_modules" / "@capacitor" / "core" / "dist" / "capacitor.js"
     if not core_js.is_file():
         msg = f"reflex-capacitor: missing {core_js} — run npm install in {cap_root}"
         raise FileNotFoundError(msg)
-    shutil.copyfile(core_js, vendor / "capacitor.js")
+    shutil.copyfile(core_js, vendor_dir / "capacitor.js")
 
-    for short in plugins:
-        pkg = PLUGIN_PACKAGES[short]
-        plugin_js = cap_root / "node_modules" / pkg / "dist" / "plugin.js"
+    for plugin_id in plugin_ids:
+        npm_package = CAPACITOR_PLUGIN_PACKAGES[plugin_id]
+        plugin_js = cap_root / "node_modules" / npm_package / "dist" / "plugin.js"
         if not plugin_js.is_file():
-            msg = f"reflex-capacitor: missing {plugin_js} — add {pkg} to CapacitorPlugin.plugins"
+            msg = (
+                f"reflex-capacitor: missing {plugin_js} — "
+                f"add {npm_package!r} to CapacitorPlugin.plugins"
+            )
             raise FileNotFoundError(msg)
-        dest_name = PLUGIN_VENDOR_FILE[short]
-        shutil.copyfile(plugin_js, vendor / dest_name)
+        shutil.copyfile(plugin_js, vendor_dir / vendor_script_filename(plugin_id))
 
 
-def ensure_android_notification_permission(manifest_path) -> None:
-    """Add POST_NOTIFICATIONS for Android 13+ local notifications."""
-    _ensure_android_permission(manifest_path, "android.permission.POST_NOTIFICATIONS")
+def ensure_android_notification_permission(manifest_path: Path | str) -> None:
+    """Add ``POST_NOTIFICATIONS`` for Android 13+ local notifications."""
+    _ensure_android_permission(manifest_path, _ANDROID_PERMISSION_POST_NOTIFICATIONS)
 
 
-def ensure_android_vibrate_permission(manifest_path) -> None:
-    """Add VIBRATE for Capacitor Haptics on Android."""
-    _ensure_android_permission(manifest_path, "android.permission.VIBRATE")
+def ensure_android_vibrate_permission(manifest_path: Path | str) -> None:
+    """Add ``VIBRATE`` for Capacitor Haptics on Android."""
+    _ensure_android_permission(manifest_path, _ANDROID_PERMISSION_VIBRATE)
 
 
-def ensure_android_camera_permissions(manifest_path) -> None:
-    """Add camera / gallery permissions for @capacitor/camera (incl. saveToGallery)."""
+def ensure_android_camera_permissions(manifest_path: Path | str) -> None:
+    """Add camera and gallery permissions for ``@capacitor/camera``."""
     ensure_android_permissions(
         manifest_path,
         (
-            "android.permission.CAMERA",
-            "android.permission.READ_MEDIA_IMAGES",
-            "android.permission.READ_EXTERNAL_STORAGE",
-            "android.permission.WRITE_EXTERNAL_STORAGE",
+            _ANDROID_PERMISSION_CAMERA,
+            _ANDROID_PERMISSION_READ_MEDIA_IMAGES,
+            _ANDROID_PERMISSION_READ_EXTERNAL_STORAGE,
+            _ANDROID_PERMISSION_WRITE_EXTERNAL_STORAGE,
         ),
     )
 
 
-def ensure_android_location_permissions(manifest_path) -> None:
-    """Add location permissions for @capacitor/geolocation."""
+def ensure_android_location_permissions(manifest_path: Path | str) -> None:
+    """Add location permissions for ``@capacitor/geolocation``."""
     ensure_android_permissions(
         manifest_path,
         (
-            "android.permission.ACCESS_FINE_LOCATION",
-            "android.permission.ACCESS_COARSE_LOCATION",
+            _ANDROID_PERMISSION_FINE_LOCATION,
+            _ANDROID_PERMISSION_COARSE_LOCATION,
         ),
     )
 
 
-def ensure_android_permissions(manifest_path, perms: tuple[str, ...]) -> None:
-    """Add multiple Android permissions if missing."""
-    for perm in perms:
-        _ensure_android_permission(manifest_path, perm)
+def ensure_android_permissions(manifest_path: Path | str, permissions: tuple[str, ...]) -> None:
+    """Add multiple Android ``uses-permission`` entries when missing."""
+    for permission in permissions:
+        _ensure_android_permission(manifest_path, permission)
 
 
-def _ensure_android_permission(manifest_path, perm: str) -> None:
-    """Insert a uses-permission line if missing from AndroidManifest.xml."""
-    from pathlib import Path
-
+def _ensure_android_permission(manifest_path: Path | str, permission: str) -> None:
+    """Insert a ``uses-permission`` line if missing from ``AndroidManifest.xml``."""
     path = Path(manifest_path)
     if not path.is_file():
         return
+
     text = path.read_text(encoding="utf-8")
-    if perm in text:
+    if permission in text:
         return
-    insert = f'    <uses-permission android:name="{perm}" />\n'
+
+    permission_line = f'    <uses-permission android:name="{permission}" />\n'
     if "<manifest" in text and "<uses-permission" not in text:
         lines = text.splitlines(keepends=True)
-        out = []
+        output: list[str] = []
         inserted = False
         for line in lines:
-            out.append(line)
+            output.append(line)
             if not inserted and line.strip().startswith("<manifest"):
-                out.append("\n")
-                out.append(insert)
+                output.append("\n")
+                output.append(permission_line)
                 inserted = True
         if inserted:
-            path.write_text("".join(out), encoding="utf-8")
+            path.write_text("".join(output), encoding="utf-8")
             return
-    # Fallback: append before </manifest>
+
     if "</manifest>" in text:
-        text = text.replace("</manifest>", insert + "</manifest>", 1)
-        path.write_text(text, encoding="utf-8")
+        path.write_text(text.replace("</manifest>", permission_line + "</manifest>", count=1), encoding="utf-8")

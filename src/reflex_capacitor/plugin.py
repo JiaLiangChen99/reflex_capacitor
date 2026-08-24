@@ -20,7 +20,7 @@ from .config import (
     default_app_id,
     slugify,
 )
-from .bridge.plugins import DEFAULT_PLUGINS, apply_package_json_deps, resolve_plugins
+from .bridge.plugins import CORE_PLUGIN_IDS, apply_package_json_deps, resolve_plugin_ids
 from .bridge.inject import install_bridge
 
 # Marker so we know this directory was scaffolded by reflex-capacitor.
@@ -41,7 +41,7 @@ class CapacitorPlugin(Plugin):
         app_id: Reverse-DNS bundle id (e.g. ``com.example.myapp``).
         capacitor_dir: Capacitor project directory relative to the app root.
         web_dir: Folder name inside ``capacitor_dir`` used as Capacitor ``webDir``.
-        plugins: Capacitor plugin short ids (see ``bridge.plugins.PLUGIN_PACKAGES``).
+        plugins: Capacitor plugin short ids (see ``bridge.plugins.CAPACITOR_PLUGIN_PACKAGES``).
         icon: Optional path (relative to app root) to a PNG copied into Android mipmap
             folders when ``android/`` exists (e.g. ``assets/icon.png``).
     """
@@ -51,12 +51,12 @@ class CapacitorPlugin(Plugin):
     app_id: str | None = None
     capacitor_dir: str = DEFAULT_CAPACITOR_DIR
     web_dir: str = DEFAULT_WEB_DIR
-    plugins: tuple[str, ...] = DEFAULT_PLUGINS
+    plugins: tuple[str, ...] = CORE_PLUGIN_IDS
     icon: str | None = None
 
     def _resolved_plugins(self) -> tuple[str, ...]:
         """Return validated plugin short names."""
-        return resolve_plugins(self.plugins)
+        return resolve_plugin_ids(self.plugins)
 
     def _resolved_names(self) -> tuple[str, str]:
         """Resolve display name and app id from config defaults.
@@ -285,7 +285,7 @@ class CapacitorPlugin(Plugin):
         from reflex_base.utils import console
 
         from .bridge.plugins import (
-            copy_vendor_scripts,
+            copy_plugin_vendor_scripts,
             ensure_android_camera_permissions,
             ensure_android_location_permissions,
             ensure_android_notification_permission,
@@ -298,7 +298,7 @@ class CapacitorPlugin(Plugin):
             msg = f"reflex-capacitor: www dir missing at {www} — run export/sync first"
             raise FileNotFoundError(msg)
 
-        copy_vendor_scripts(root, www, self._resolved_plugins())
+        copy_plugin_vendor_scripts(root, www, self._resolved_plugins())
         console.info(f"reflex-capacitor: copied Capacitor vendor scripts into {www / 'assets'}")
 
         manifest = root / "android" / "app" / "src" / "main" / "AndroidManifest.xml"

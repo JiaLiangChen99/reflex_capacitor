@@ -20,7 +20,7 @@ reflex-capacitor doctor --android   # 本机要打 APK 时
 ```python
 import reflex as rx
 from reflex_capacitor import CapacitorPlugin
-from reflex_capacitor.bridge.plugins import DEMO_PLUGINS
+from reflex_capacitor.bridge.plugins import ALL_PLUGIN_IDS
 
 config = rx.Config(
     app_name="demo",
@@ -30,7 +30,7 @@ config = rx.Config(
             backend_url="http://192.168.1.56:8001",  # 生产改为 https://
             app_id="dev.reflex.myapp",
             app_name="My App",
-            plugins=DEMO_PLUGINS,
+            plugins=ALL_PLUGIN_IDS,
         ),
     ],
 )

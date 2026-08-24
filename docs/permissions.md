@@ -13,7 +13,7 @@ Python ↔ Capacitor 桥接代码位于 `src/reflex_capacitor/bridge/`：
 | `inject.py` | 复制 bridge.js、注入 `index.html` |
 | `plugins.py` | npm 包映射、vendor 拷贝、Manifest 补丁 |
 
-## 默认插件（P0）
+## 默认插件（核心）
 
 | 插件 | Android | iOS | 备注 |
 |------|---------|-----|------|
@@ -34,15 +34,15 @@ Python ↔ Capacitor 桥接代码位于 `src/reflex_capacitor/bridge/`：
 | browser | 无 | 无 | 应用内浏览器 |
 | filesystem | 无（沙箱内） | 无 | 仅 app 沙箱目录 |
 
-## Phase 3 P1 插件（demo 默认启用）
+## 扩展插件（demo 默认启用）
 
-`rxconfig.py` 使用 `DEMO_PLUGINS = DEFAULT_PLUGINS + P1_PLUGINS`（见 `bridge/plugins.py`）。
+`rxconfig.py` 使用 `ALL_PLUGIN_IDS = CORE_PLUGIN_IDS + EXTENDED_PLUGIN_IDS`（见 `bridge/plugins.py`）。
 
-若只要 P0，改回 `plugins=DEFAULT_PLUGINS` 或自定义 tuple。
+若只要核心插件，改回 `plugins=CORE_PLUGIN_IDS` 或自定义 tuple。
 
 ## 自定义插件
 
-在 `rxconfig.py` 的 `CapacitorPlugin(plugins=(...))` 中追加 short id（见 `bridge/plugins.py` 的 `PLUGIN_PACKAGES`），然后：
+在 `rxconfig.py` 的 `CapacitorPlugin(plugins=(...))` 中追加 short id（见 `bridge/plugins.py` 的 `CAPACITOR_PLUGIN_PACKAGES`），然后：
 
 ```bash
 reflex-capacitor sync
