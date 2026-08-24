@@ -39,6 +39,18 @@ DEFAULT_PLUGINS: tuple[str, ...] = (
     "network",
 )
 
+# Demo / Phase 3 P1 extras (enable in rxconfig CapacitorPlugin.plugins=).
+P1_PLUGINS: tuple[str, ...] = (
+    "preferences",
+    "camera",
+    "geolocation",
+    "keyboard",
+    "browser",
+    "filesystem",
+)
+
+DEMO_PLUGINS: tuple[str, ...] = DEFAULT_PLUGINS + P1_PLUGINS
+
 # Vendor script filename stem (plugin.js copies) per short id.
 PLUGIN_VENDOR_FILE: dict[str, str] = {
     short: pkg.rsplit("/", 1)[-1] + ".plugin.js" for short, pkg in PLUGIN_PACKAGES.items()
@@ -135,19 +147,54 @@ def copy_vendor_scripts(cap_root, www_dir, plugins: tuple[str, ...]) -> None:
 
 def ensure_android_notification_permission(manifest_path) -> None:
     """Add POST_NOTIFICATIONS for Android 13+ local notifications."""
+    _ensure_android_permission(manifest_path, "android.permission.POST_NOTIFICATIONS")
+
+
+def ensure_android_vibrate_permission(manifest_path) -> None:
+    """Add VIBRATE for Capacitor Haptics on Android."""
+    _ensure_android_permission(manifest_path, "android.permission.VIBRATE")
+
+
+def ensure_android_camera_permissions(manifest_path) -> None:
+    """Add camera / gallery permissions for @capacitor/camera."""
+    ensure_android_permissions(
+        manifest_path,
+        (
+            "android.permission.CAMERA",
+            "android.permission.READ_MEDIA_IMAGES",
+        ),
+    )
+
+
+def ensure_android_location_permissions(manifest_path) -> None:
+    """Add location permissions for @capacitor/geolocation."""
+    ensure_android_permissions(
+        manifest_path,
+        (
+            "android.permission.ACCESS_FINE_LOCATION",
+            "android.permission.ACCESS_COARSE_LOCATION",
+        ),
+    )
+
+
+def ensure_android_permissions(manifest_path, perms: tuple[str, ...]) -> None:
+    """Add multiple Android permissions if missing."""
+    for perm in perms:
+        _ensure_android_permission(manifest_path, perm)
+
+
+def _ensure_android_permission(manifest_path, perm: str) -> None:
+    """Insert a uses-permission line if missing from AndroidManifest.xml."""
     from pathlib import Path
 
     path = Path(manifest_path)
     if not path.is_file():
         return
     text = path.read_text(encoding="utf-8")
-    perm = 'android.permission.POST_NOTIFICATIONS'
     if perm in text:
         return
     insert = f'    <uses-permission android:name="{perm}" />\n'
     if "<manifest" in text and "<uses-permission" not in text:
-        text = text.replace("<manifest", "<manifest", 1)
-        # After opening manifest tag line
         lines = text.splitlines(keepends=True)
         out = []
         inserted = False
@@ -159,3 +206,8 @@ def ensure_android_notification_permission(manifest_path) -> None:
                 inserted = True
         if inserted:
             path.write_text("".join(out), encoding="utf-8")
+            return
+    # Fallback: append before </manifest>
+    if "</manifest>" in text:
+        text = text.replace("</manifest>", insert + "</manifest>", 1)
+        path.write_text(text, encoding="utf-8")

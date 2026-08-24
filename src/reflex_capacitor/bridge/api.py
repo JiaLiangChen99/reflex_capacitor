@@ -33,14 +33,19 @@ def toast(text: str, *, duration: ToastDuration = "short") -> rx.event.EventSpec
     return call_bridge_void("toast", {"text": text, "duration": duration})
 
 
-def haptics_impact(*, style: ImpactStyle = "MEDIUM") -> rx.event.EventSpec:
-    """Trigger a haptic impact."""
-    return call_bridge_void("hapticsImpact", {"style": style})
+def haptics_impact(*, style: ImpactStyle = "MEDIUM", callback: Any = None) -> rx.event.EventSpec:
+    """Trigger a haptic impact (very short tick — may be hard to feel on some Android phones)."""
+    return call_bridge("hapticsImpact", {"style": style}, callback=callback)
 
 
-def haptics_notification(*, type: NotificationStyle = "SUCCESS") -> rx.event.EventSpec:
-    """Trigger a haptic notification pattern."""
-    return call_bridge_void("hapticsNotification", {"type": type})
+def haptics_notification(*, type: NotificationStyle = "SUCCESS", callback: Any = None) -> rx.event.EventSpec:
+    """Trigger a haptic notification pattern (slightly longer than impact)."""
+    return call_bridge("hapticsNotification", {"type": type}, callback=callback)
+
+
+def haptics_vibrate(*, duration_ms: int = 300, callback: Any = None) -> rx.event.EventSpec:
+    """Vibrate for ``duration_ms`` — more noticeable than impact for testing."""
+    return call_bridge("hapticsVibrate", {"duration": duration_ms}, callback=callback)
 
 
 def share(
@@ -121,3 +126,81 @@ def bridge_logs(limit: int = 50, callback: Any = None) -> rx.event.EventSpec:
 def clear_logs() -> rx.event.EventSpec:
     """Clear the in-WebView bridge log buffer."""
     return call_bridge_void("clearLogs")
+
+
+# --- Phase 3 P1 ---
+
+
+def pref_set(key: str, value: str, *, callback: Any = None) -> rx.event.EventSpec:
+    """Store a string in Capacitor Preferences (device-local key/value)."""
+    return call_bridge("prefSet", {"key": key, "value": value}, callback=callback)
+
+
+def pref_get(key: str, callback: Any) -> rx.event.EventSpec:
+    """Read a Preferences value; callback receives ``{key, value}``."""
+    return call_bridge("prefGet", {"key": key}, callback=callback)
+
+
+def take_photo(callback: Any, *, quality: int = 90) -> rx.event.EventSpec:
+    """Capture a photo; callback receives ``{dataUrl, format}`` (not a file path)."""
+    return call_bridge("takePhoto", {"quality": quality}, callback=callback)
+
+
+def pick_images(callback: Any, *, limit: int = 1, quality: int = 90) -> rx.event.EventSpec:
+    """Pick images from the gallery; callback receives ``{photos: [...]}``."""
+    return call_bridge("pickImages", {"limit": limit, "quality": quality}, callback=callback)
+
+
+def get_current_position(callback: Any, *, enable_high_accuracy: bool = True) -> rx.event.EventSpec:
+    """Get GPS coordinates; callback receives lat/lon/accuracy."""
+    return call_bridge(
+        "getCurrentPosition",
+        {"enableHighAccuracy": enable_high_accuracy},
+        callback=callback,
+    )
+
+
+def keyboard_show(*, callback: Any = None) -> rx.event.EventSpec:
+    """Show the soft keyboard."""
+    return call_bridge("keyboardShow", callback=callback)
+
+
+def keyboard_hide(*, callback: Any = None) -> rx.event.EventSpec:
+    """Hide the soft keyboard."""
+    return call_bridge("keyboardHide", callback=callback)
+
+
+def browser_open(url: str, *, callback: Any = None) -> rx.event.EventSpec:
+    """Open a URL in the in-app browser (SFSafariViewController / Custom Tabs)."""
+    return call_bridge("browserOpen", {"url": url}, callback=callback)
+
+
+def fs_write(
+    path: str,
+    data: str,
+    *,
+    directory: str = "DATA",
+    callback: Any = None,
+) -> rx.event.EventSpec:
+    """Write UTF-8 text to the app sandbox (Capacitor Filesystem directory)."""
+    return call_bridge("fsWrite", {"path": path, "data": data, "directory": directory}, callback=callback)
+
+
+def fs_read(path: str, callback: Any, *, directory: str = "DATA") -> rx.event.EventSpec:
+    """Read UTF-8 text from the app sandbox."""
+    return call_bridge("fsRead", {"path": path, "directory": directory}, callback=callback)
+
+
+def invoke(
+    plugin: str,
+    method: str,
+    args: dict[str, Any] | None = None,
+    *,
+    callback: Any = None,
+) -> rx.event.EventSpec:
+    """Call a Capacitor plugin method directly (extension point for custom plugins)."""
+    return call_bridge(
+        "invoke",
+        {"plugin": plugin, "method": method, "args": args or {}},
+        callback=callback,
+    )

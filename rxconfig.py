@@ -1,6 +1,7 @@
 import reflex as rx
 
 from reflex_capacitor import CapacitorPlugin
+from reflex_capacitor.bridge.plugins import DEMO_PLUGINS
 
 config = rx.Config(
     app_name="demo",
@@ -17,6 +18,7 @@ config = rx.Config(
             backend_url="http://192.168.1.56:8001",
             app_name="Shell",
             app_id="dev.reflex.capacitor.demo",
+            plugins=DEMO_PLUGINS,
         ),
     ],
 )

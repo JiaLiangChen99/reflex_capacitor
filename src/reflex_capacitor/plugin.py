@@ -42,6 +42,8 @@ class CapacitorPlugin(Plugin):
         capacitor_dir: Capacitor project directory relative to the app root.
         web_dir: Folder name inside ``capacitor_dir`` used as Capacitor ``webDir``.
         plugins: Capacitor plugin short ids (see ``bridge.plugins.PLUGIN_PACKAGES``).
+        icon: Optional path (relative to app root) to a PNG copied into Android mipmap
+            folders when ``android/`` exists (e.g. ``assets/icon.png``).
     """
 
     backend_url: str | None = None
@@ -50,6 +52,7 @@ class CapacitorPlugin(Plugin):
     capacitor_dir: str = DEFAULT_CAPACITOR_DIR
     web_dir: str = DEFAULT_WEB_DIR
     plugins: tuple[str, ...] = DEFAULT_PLUGINS
+    icon: str | None = None
 
     def _resolved_plugins(self) -> tuple[str, ...]:
         """Return validated plugin short names."""
@@ -131,6 +134,7 @@ class CapacitorPlugin(Plugin):
         install_bridge(www, self._resolved_plugins())
         console.info("reflex-capacitor: installed bridge.js (vendor scripts copied after npm install)")
 
+        self._apply_icon(project_root)
         self._warn_if_cors_blocks()
 
     def _scaffold(self, project_root: Path) -> None:
@@ -250,7 +254,13 @@ class CapacitorPlugin(Plugin):
         """
         from reflex_base.utils import console
 
-        from .bridge.plugins import copy_vendor_scripts, ensure_android_notification_permission
+        from .bridge.plugins import (
+            copy_vendor_scripts,
+            ensure_android_camera_permissions,
+            ensure_android_location_permissions,
+            ensure_android_notification_permission,
+            ensure_android_vibrate_permission,
+        )
 
         root = (project_root or (Path.cwd() / self.capacitor_dir)).resolve()
         www = root / self.web_dir
@@ -264,6 +274,43 @@ class CapacitorPlugin(Plugin):
         manifest = root / "android" / "app" / "src" / "main" / "AndroidManifest.xml"
         if "local-notifications" in self._resolved_plugins():
             ensure_android_notification_permission(manifest)
+        if "haptics" in self._resolved_plugins():
+            ensure_android_vibrate_permission(manifest)
+        if "camera" in self._resolved_plugins():
+            ensure_android_camera_permissions(manifest)
+        if "geolocation" in self._resolved_plugins():
+            ensure_android_location_permissions(manifest)
+
+        self._apply_icon(root)
+
+    def _apply_icon(self, project_root: Path) -> None:
+        """Copy a user-supplied PNG into Android mipmap launcher slots when present."""
+        if not self.icon:
+            return
+        from reflex_base.utils import console
+
+        src = (Path.cwd() / self.icon).resolve()
+        if not src.is_file():
+            console.warn(f"reflex-capacitor: icon not found at {src} — skipping")
+            return
+
+        res_root = project_root / "android" / "app" / "src" / "main" / "res"
+        if not res_root.is_dir():
+            return
+
+        copied = 0
+        for density in ("mdpi", "hdpi", "xhdpi", "xxhdpi", "xxxhdpi"):
+            dest_dir = res_root / f"mipmap-{density}"
+            if not dest_dir.is_dir():
+                continue
+            for name in ("ic_launcher.png", "ic_launcher_round.png"):
+                dest = dest_dir / name
+                if dest.parent.is_dir():
+                    shutil.copyfile(src, dest)
+                    copied += 1
+
+        if copied:
+            console.info(f"reflex-capacitor: applied icon from {src} to Android mipmaps")
 
     def _write_gitignore(self, project_root: Path) -> None:
         """Write a .gitignore for Capacitor build artifacts."""

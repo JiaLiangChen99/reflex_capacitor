@@ -34,11 +34,11 @@
 | `mobile.py` / `mobile.pyi` | Phase 2 |
 | `reflex-capacitor-bridge.js` + HTML 注入 | Phase 2 |
 | `CapacitorPlugin(plugins=(...))` | Phase 2 |
-| `CapacitorPlugin(icon=...)` | Phase 2 末 / 2.5 |
+| `CapacitorPlugin(icon=...)` | Phase 2 ✅ |
 | `reflex-capacitor dev` | Phase 3 |
 | `reflex-capacitor build`（release） | Phase 4 |
-| 单元测试 | Phase 3 |
-| CI 恢复 Environment Secret（去掉写死 URL） | Phase 2 顺手 |
+| 单元测试 | Phase 2 ✅（基础） / Phase 3（扩展） |
+| CI 恢复 Environment Secret | Phase 2 ✅ |
 | iOS 真机验证 | Phase 3 |
 
 ### Phase 1 踩坑备忘（已实现，文档化）
@@ -51,14 +51,14 @@
 
 ---
 
-## Phase 2 — 原生桥 P0（下一步）
+## Phase 2 — 原生桥 P0 ✅
 
 **目标**：对标 `reflex-desktop` 的 `desktop.py`——从 Reflex 事件调系统能力（**不是**新 UI 组件库）。
 
-**验收标准**：
+**验收标准**（已通过）：
 
 - demo 有「原生」页：点按钮弹出通知、分享、震动。
-- `from reflex_capacitor import mobile` 可用，带 `mobile.pyi`。
+- `from reflex_capacitor import mobile` 可用，带 `bridge/api.pyi`。
 - 打包后 `index.html` 注入 bridge，真机 `window.__REFLEX_CAPACITOR__` 存在。
 
 ### 2.1 Bridge 基础设施
@@ -107,13 +107,13 @@
 ### 2.4 Demo + CI 收尾
 
 - [x] demo 增加「原生」Tab（notify / share / haptics / clipboard / device / network）
-- [ ] CI：恢复 GitHub Environment secret `REFLEX_BACKEND_URL`（去掉写死 LAN IP）
-- [ ] CI：staging / production 用 HTTPS，lan 用 HTTP + 校验 `androidScheme: http`
+- [x] CI：GitHub Environment secret `REFLEX_BACKEND_URL`（lan / staging / production）
+- [x] CI：staging / production 用 HTTPS，lan 用 HTTP + 校验 `androidScheme`
 
 ### 2.5 可选（时间允许）
 
-- [ ] `CapacitorPlugin(icon="assets/logo.png")` → 复制到 Android / iOS 资源
-- [ ] 简单单元测试：bridge 注入幂等、env 烘焙 URL
+- [x] `CapacitorPlugin(icon="assets/icon.png")` → 复制到 Android mipmap
+- [x] 简单单元测试：bridge 注入幂等、env 烘焙 URL、http/https scheme
 
 **粗估**：3–5 人天。
 
@@ -134,14 +134,16 @@
 | `pref_get(key, callback)` | preferences | |
 | `fs_read` / `fs_write` | filesystem | 沙箱路径，非用户任意路径 |
 | `keyboard_show` / `keyboard_hide` | keyboard | |
+| `browser_open(url)` | browser | 应用内浏览器 |
 | `invoke(name, args, callback=)` | 自定义插件 | 扩展缝 |
 
-- [ ] 实现 P1 API
-- [ ] demo 演示拍照 / 定位（可选页）
+- [x] 实现 P1 API（bridge.js + `mobile.*`）
+- [x] demo 演示 P1（偏好 / 相机 / 定位 / 浏览器 / 沙箱文件）
+- [ ] demo 演示拍照 / 定位（可选页）→ 已合并进原生 Tab
 
 ### 3.2 `reflex-capacitor dev`
 
-- [ ] 启动 `reflex run`（或检测已在跑）
+- [ ] 启动 `reflex run`（或检测已在跑）— **回家有数据线/Android Studio 时再做**
 - [ ] 设置 `REFLEX_CAPACITOR_DEV_BACKEND_URL` + Cap `server.url` 指向开发机 LAN IP
 - [ ] 文档 [dev-reload.md](dev-reload.md)：真机与电脑同网、防火墙、端口
 - [ ] 可选：`VITE` / live reload 与 Cap 联调说明
@@ -227,24 +229,21 @@ Phase 4    release 构建 + 签名文档 + 推送等 + CI 加固
 
 | 路径 | Phase |
 |------|-------|
-| `src/reflex_capacitor/plugin.py` | 1 ✅ |
-| `src/reflex_capacitor/cli.py` | 1 ✅（缺 `dev` / `build`） |
+| `src/reflex_capacitor/plugin.py` | 1 ✅ + icon |
+| `src/reflex_capacitor/cli.py` | 1 ✅（缺 `dev` / `build` → Phase 3/4） |
 | `src/reflex_capacitor/preflight.py` | 1 ✅ |
-| `src/reflex_capacitor/mobile.py` | 2 ⬜ |
-| `src/reflex_capacitor/assets/*.js` | 2 ⬜ |
-| `demo/demo.py` 原生 Tab | 2 ⬜ |
-| `.github/workflows/android-apk.yml` | 1 ✅（Secret 改回 → 2） |
-| `docs/permissions.md` | 2 ⬜ |
+| `src/reflex_capacitor/bridge/`（api、inject、assets） | 2 ✅ |
+| `demo/demo.py` 原生 Tab + P1 按钮 | 3 🚧 |
+| `tests/test_inject.py` / `tests/test_plugin.py` | 2 ✅ |
+| `.github/workflows/android-apk.yml` | 2 ✅（Environment matrix） |
+| `docs/permissions.md` / `docs/debug.md` | 2 ✅ |
 | `docs/dev-reload.md` | 3 ⬜ |
 | `docs/publishing.md` | 4 ⬜ |
 
 ---
 
-## 开工 Phase 2 时的建议顺序
+## 下一步：Phase 3（进行中）
 
-1. `bridge.js` + HTML 注入  
-2. `plugins=` → `package.json`  
-3. `mobile.notify` / `share` / `haptics`（最小三条验证链路）  
-4. 其余 P0 API  
-5. demo 原生页 + 真机验收  
-6. CI Secret 改回 + `permissions.md`
+- ✅ P1 原生 API + demo（CI 打 APK 测试）
+- ⬜ `reflex-capacitor dev` 真机热重载（需本地 Android 环境）
+- ⬜ 反向事件（返回键 / app 生命周期）

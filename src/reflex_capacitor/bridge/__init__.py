@@ -7,6 +7,8 @@ from .inject import install_bridge
 from .log import log_bridge
 from .plugins import (
     DEFAULT_PLUGINS,
+    DEMO_PLUGINS,
+    P1_PLUGINS,
     PLUGIN_PACKAGES,
     apply_package_json_deps,
     copy_vendor_scripts,
@@ -16,6 +18,8 @@ from .plugins import (
 
 __all__ = [
     "DEFAULT_PLUGINS",
+    "DEMO_PLUGINS",
+    "P1_PLUGINS",
     "PLUGIN_PACKAGES",
     "api",
     "mobile",

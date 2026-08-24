@@ -27,6 +27,18 @@ Python ↔ Capacitor 桥接代码位于 `src/reflex_capacitor/bridge/`：
 | toast | 无 | 无 | |
 | device | 无 | 无 | 只读设备信息 |
 | network | `ACCESS_NETWORK_STATE` | 无 | Cap sync 通常已包含 |
+| preferences | 无 | 无 | 本地 KV |
+| camera | `CAMERA`, `READ_MEDIA_IMAGES` | 相机/相册用途说明 | `finalize_bridge` 写入 Manifest |
+| geolocation | `ACCESS_FINE_LOCATION`, `ACCESS_COARSE_LOCATION` | 定位用途说明 | 运行时请求 |
+| keyboard | 无 | 无 | |
+| browser | 无 | 无 | 应用内浏览器 |
+| filesystem | 无（沙箱内） | 无 | 仅 app 沙箱目录 |
+
+## Phase 3 P1 插件（demo 默认启用）
+
+`rxconfig.py` 使用 `DEMO_PLUGINS = DEFAULT_PLUGINS + P1_PLUGINS`（见 `bridge/plugins.py`）。
+
+若只要 P0，改回 `plugins=DEFAULT_PLUGINS` 或自定义 tuple。
 
 ## 自定义插件
 

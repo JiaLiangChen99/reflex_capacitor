@@ -121,6 +121,25 @@
       return { ok: true };
     },
 
+    /** Longer vibration — easier to feel on Android than short impact ticks. */
+    async hapticsVibrate({ duration }) {
+      const H = plugin("Haptics");
+      const ms = Math.max(10, Math.min(Number(duration) || 300, 5000));
+      if (!H) {
+        if (typeof navigator !== "undefined" && navigator.vibrate) {
+          navigator.vibrate(ms);
+          return { ok: true, fallback: "web_vibrate", duration: ms };
+        }
+        return { ok: false, error: "haptics_unavailable" };
+      }
+      if (typeof H.vibrate === "function") {
+        await H.vibrate({ duration: ms });
+        return { ok: true, duration: ms };
+      }
+      await H.impact({ style: "HEAVY" });
+      return { ok: true, fallback: "impact_only", duration: ms };
+    },
+
     async share({ title, text, url, dialogTitle }) {
       const S = plugin("Share");
       if (!S) {
@@ -203,6 +222,147 @@
       await A.exitApp();
       return { ok: true };
     },
+
+    async prefSet({ key, value }) {
+      const P = plugin("Preferences");
+      if (!P) return { ok: false, error: "plugin_missing" };
+      await P.set({ key: key || "", value: String(value ?? "") });
+      return { ok: true, key: key };
+    },
+
+    async prefGet({ key }) {
+      const P = plugin("Preferences");
+      if (!P) return { ok: false, error: "plugin_missing", value: "" };
+      const result = await P.get({ key: key || "" });
+      return { ok: true, key: key, value: result && result.value != null ? result.value : "" };
+    },
+
+    async takePhoto({ quality }) {
+      const Cam = plugin("Camera");
+      if (!Cam) return { ok: false, error: "plugin_missing" };
+      let perm = await Cam.checkPermissions();
+      if (perm.camera !== "granted" || perm.photos !== "granted") {
+        perm = await Cam.requestPermissions({ permissions: ["camera", "photos"] });
+        if (perm.camera !== "granted") {
+          return { ok: false, error: "permission_denied", permission: perm };
+        }
+      }
+      const photo = await Cam.getPhoto({
+        quality: Math.max(1, Math.min(Number(quality) || 90, 100)),
+        allowEditing: false,
+        resultType: "dataUrl",
+        source: "CAMERA",
+      });
+      return { ok: true, dataUrl: photo.dataUrl || "", format: photo.format || "" };
+    },
+
+    async pickImages({ limit, quality }) {
+      const Cam = plugin("Camera");
+      if (!Cam) return { ok: false, error: "plugin_missing" };
+      let perm = await Cam.checkPermissions();
+      if (perm.photos !== "granted") {
+        perm = await Cam.requestPermissions({ permissions: ["photos"] });
+        if (perm.photos !== "granted") {
+          return { ok: false, error: "permission_denied", permission: perm };
+        }
+      }
+      const result = await Cam.pickImages({
+        quality: Math.max(1, Math.min(Number(quality) || 90, 100)),
+        limit: Math.max(1, Math.min(Number(limit) || 1, 10)),
+      });
+      const photos = (result.photos || []).map(function (p) {
+        return { webPath: p.webPath || "", format: p.format || "" };
+      });
+      return { ok: true, count: photos.length, photos: photos };
+    },
+
+    async getCurrentPosition({ enableHighAccuracy }) {
+      const G = plugin("Geolocation");
+      if (!G) return { ok: false, error: "plugin_missing" };
+      let perm = await G.checkPermissions();
+      if (perm.location !== "granted") {
+        perm = await G.requestPermissions();
+        if (perm.location !== "granted") {
+          return { ok: false, error: "permission_denied", permission: perm };
+        }
+      }
+      const pos = await G.getCurrentPosition({
+        enableHighAccuracy: enableHighAccuracy !== false,
+        timeout: 15000,
+      });
+      return {
+        ok: true,
+        latitude: pos.coords.latitude,
+        longitude: pos.coords.longitude,
+        accuracy: pos.coords.accuracy,
+        altitude: pos.coords.altitude,
+        timestamp: pos.timestamp,
+      };
+    },
+
+    async keyboardShow() {
+      const K = plugin("Keyboard");
+      if (!K) return { ok: false, error: "plugin_missing" };
+      await K.show();
+      return { ok: true };
+    },
+
+    async keyboardHide() {
+      const K = plugin("Keyboard");
+      if (!K) return { ok: false, error: "plugin_missing" };
+      await K.hide();
+      return { ok: true };
+    },
+
+    async browserOpen({ url }) {
+      const B = plugin("Browser");
+      if (!B) {
+        if (typeof window !== "undefined" && url) {
+          window.open(url, "_blank");
+          return { ok: true, fallback: "window_open" };
+        }
+        return { ok: false, error: "browser_unavailable" };
+      }
+      await B.open({ url: url || "about:blank" });
+      return { ok: true };
+    },
+
+    async fsWrite({ path, data, directory }) {
+      const FS = plugin("Filesystem");
+      if (!FS) return { ok: false, error: "plugin_missing" };
+      await FS.writeFile({
+        path: path || "reflex-capacitor.txt",
+        data: data || "",
+        directory: directory || "DATA",
+        encoding: "utf8",
+      });
+      return { ok: true, path: path, directory: directory || "DATA" };
+    },
+
+    async fsRead({ path, directory }) {
+      const FS = plugin("Filesystem");
+      if (!FS) return { ok: false, error: "plugin_missing" };
+      const result = await FS.readFile({
+        path: path || "reflex-capacitor.txt",
+        directory: directory || "DATA",
+        encoding: "utf8",
+      });
+      return {
+        ok: true,
+        path: path,
+        data: result.data != null ? result.data : "",
+        directory: directory || "DATA",
+      };
+    },
+
+    async invoke({ plugin: pluginName, method, args }) {
+      const P = Plugins[pluginName];
+      if (!P || typeof P[method] !== "function") {
+        return { ok: false, error: "invoke_not_found", plugin: pluginName, method: method };
+      }
+      const result = await P[method](args || {});
+      return { ok: true, result: result };
+    },
   };
 
   const bridge = {
@@ -232,6 +392,12 @@
         "Toast",
         "Device",
         "Network",
+        "Preferences",
+        "Camera",
+        "Geolocation",
+        "Keyboard",
+        "Browser",
+        "Filesystem",
       ];
       const loaded = expected.filter(function (name) {
         return !!Plugins[name];
@@ -241,7 +407,7 @@
       });
       return {
         bridgeLoaded: true,
-        bridgeVersion: 1,
+        bridgeVersion: 2,
         isNative: core.isNative(),
         platform: core.platform(),
         capacitorCore: !!(Cap && Cap.isNativePlatform),

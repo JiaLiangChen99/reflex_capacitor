@@ -1,33 +1,74 @@
-# CI：打 Android 调试包（当前写死后端 URL）
+# CI：Android debug APK
 
-> **临时调试**：workflow 写死 `http://192.168.1.56:8001`。
+GitHub Actions 按 **Environment** 烘焙不同后端 URL，打 debug APK。
 
-## 为什么会出现 `timeout connect ws://…/_event`
+## 配置 GitHub Environments
 
-手机浏览器能开 HTTP，App 仍连不上 WebSocket，常见是这两点：
+仓库 **Settings → Environments** 新建三个环境，各添加 **Environment secret**：
 
-1. **混合内容（本次主因）**  
-   Capacitor 默认 `androidScheme: "https"` → 页面来自 `https://localhost`，再去连 `ws://192.168.x.x` 会被 WebView 当成 insecure mixed content 拦掉，表现就是 timeout。  
-   **修复**：HTTP 后端时强制 `androidScheme: "http"` + `cleartext: true`。
+| Environment | Secret | 示例值 | 说明 |
+|-------------|--------|--------|------|
+| `lan` | `REFLEX_BACKEND_URL` | `http://192.168.1.56:8001` | 局域网 HTTP，需 cleartext + `androidScheme: http` |
+| `staging` | `REFLEX_BACKEND_URL` | `https://staging.example.com` | HTTPS + WSS |
+| `production` | `REFLEX_BACKEND_URL` | `https://api.example.com` | HTTPS + WSS |
 
-2. **Windows 防火墙**  
-   若手机浏览器也打不开 `http://192.168.1.56:8001/ping`，在 Windows 上放行 Python 入站，或临时关专用网络防火墙试一次。
+**不要**在 workflow 里写死后端 IP；push 时只构建 `lan`，手动 Run workflow 可选单个环境或 `all`（三个 matrix 并行）。
 
-## 你要确认
+## 触发方式
 
-1. 后端在跑且是 `0.0.0.0:8001`（不要只绑 `127.0.0.1`）：
-   ```bash
-   reflex run --env prod --backend-only
-   ```
-2. 手机浏览器能打开：`http://192.168.1.56:8001/ping`（应返回 `"pong"`）
-3. 用**新打的 APK**（含 `androidScheme: http`）覆盖安装后再测
+| 事件 | 构建矩阵 |
+|------|----------|
+| push / PR → `main` | 仅 `lan` |
+| workflow_dispatch | 选 `lan` / `staging` / `production` / `all` |
 
-## 跑包
+Actions → **Android APK** → Run workflow。
 
-Actions → **Android APK** → Run workflow → `lan` → 下载安装。
+## CI 校验项
 
-CI 会校验：
+**HTTP（lan）**
 
-- env 含 `ws://192.168.1.56:8001/_event`
-- `cleartext: true` 且 `androidScheme: "http"`
-- Manifest 含 `usesCleartextTraffic="true"`
+- baked env 含 `ws://<host>/_event`
+- `server.cleartext: true`、`androidScheme: "http"`
+- Manifest `usesCleartextTraffic="true"`
+
+**HTTPS（staging / production）**
+
+- baked env 含 `wss://<host>/_event`
+- `androidScheme: "https"`，且 `cleartext` 不为 `true`
+
+**共用**
+
+- `index.html` 已注入 `<!-- reflex-capacitor bridge begin -->`
+- `pytest tests/` 通过后再打 APK
+
+## 真机调试（lan）
+
+### WebSocket timeout
+
+1. **混合内容**：HTTP 后端必须 `androidScheme: "http"`（插件已自动设置）。
+2. **防火墙**：手机访问不了 `http://<ip>:8001/ping` 时，在 Windows 放行 Python 入站（如 TCP 8001）。
+
+### 本地后端
+
+```bash
+reflex run --env prod --backend-only --backend-host 0.0.0.0 --backend-port 8001
+```
+
+手机浏览器应能打开：`http://<你的局域网IP>:8001/ping` → `pong`。
+
+## 下载 APK
+
+构建完成后 → 对应 job → **Artifacts** → `app-debug-lan`（或 staging / production）。
+
+## 可选：App 图标
+
+`rxconfig.py`：
+
+```python
+CapacitorPlugin(
+    backend_url="http://192.168.1.56:8001",
+    icon="assets/icon.png",  # PNG，sync 后复制到 Android mipmap
+)
+```
+
+需已 `reflex-capacitor init` 生成 `android/`。

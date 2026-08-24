@@ -97,11 +97,13 @@ class State(rx.State):
 
     @rx.event
     def run_haptics(self):
-        self._append_server_log(log_bridge("hapticsImpact", source="server"))
-        return [
-            mobile.haptics_impact(style="MEDIUM"),
-            mobile.bridge_logs(30, State.on_client_logs),
-        ]
+        self._append_server_log(log_bridge("hapticsImpact", args={"style": "HEAVY"}, source="server"))
+        return mobile.haptics_impact(style="HEAVY", callback=State.on_bridge_result)
+
+    @rx.event
+    def run_haptics_vibrate(self):
+        self._append_server_log(log_bridge("hapticsVibrate", args={"duration": 400}, source="server"))
+        return mobile.haptics_vibrate(duration_ms=400, callback=State.on_bridge_result)
 
     @rx.event
     def run_share(self):
@@ -135,6 +137,55 @@ class State(rx.State):
         return mobile.network_status(State.on_bridge_result)
 
     @rx.event
+    def run_pref_set(self):
+        self._append_server_log(log_bridge("prefSet", args={"key": "shell_demo"}, source="server"))
+        return mobile.pref_set("shell_demo", "hello-from-reflex", callback=State.on_bridge_result)
+
+    @rx.event
+    def run_pref_get(self):
+        self._append_server_log(log_bridge("prefGet", source="server"))
+        return mobile.pref_get("shell_demo", State.on_bridge_result)
+
+    @rx.event
+    def run_take_photo(self):
+        self._append_server_log(log_bridge("takePhoto", source="server"))
+        return mobile.take_photo(State.on_bridge_result, quality=80)
+
+    @rx.event
+    def run_pick_images(self):
+        self._append_server_log(log_bridge("pickImages", source="server"))
+        return mobile.pick_images(State.on_bridge_result, limit=3, quality=80)
+
+    @rx.event
+    def run_geolocation(self):
+        self._append_server_log(log_bridge("getCurrentPosition", source="server"))
+        return mobile.get_current_position(State.on_bridge_result)
+
+    @rx.event
+    def run_browser(self):
+        self._append_server_log(log_bridge("browserOpen", source="server"))
+        return mobile.browser_open("https://reflex.dev", callback=State.on_bridge_result)
+
+    @rx.event
+    def run_fs_write(self):
+        self._append_server_log(log_bridge("fsWrite", source="server"))
+        return mobile.fs_write(
+            "demo-note.txt",
+            "reflex-capacitor sandbox write",
+            callback=State.on_bridge_result,
+        )
+
+    @rx.event
+    def run_fs_read(self):
+        self._append_server_log(log_bridge("fsRead", source="server"))
+        return mobile.fs_read("demo-note.txt", State.on_bridge_result)
+
+    @rx.event
+    def run_keyboard_hide(self):
+        self._append_server_log(log_bridge("keyboardHide", source="server"))
+        return mobile.keyboard_hide(callback=State.on_bridge_result)
+
+    @rx.event
     def increment(self):
         self.count += 1
 
@@ -152,8 +203,20 @@ class State(rx.State):
             self.bridge_msg = "无返回（可能不在 Capacitor 壳内，或 bridge 未加载）。"
             self._append_server_log(log_bridge("callback", error="null", source="client"))
         elif isinstance(result, dict):
-            self.bridge_msg = json.dumps(result, ensure_ascii=False, indent=2)
-            self._append_server_log(log_bridge("callback", result=result, source="client"))
+            preview = dict(result)
+            data_url = preview.get("dataUrl")
+            if isinstance(data_url, str) and len(data_url) > 96:
+                preview["dataUrl"] = f"{data_url[:96]}… ({len(data_url)} chars)"
+            photos = preview.get("photos")
+            if isinstance(photos, list):
+                preview["photos"] = [
+                    {**p, "webPath": (p.get("webPath") or "")[:64] + "…" if len(p.get("webPath") or "") > 64 else p.get("webPath")}
+                    if isinstance(p, dict)
+                    else p
+                    for p in photos
+                ]
+            self.bridge_msg = json.dumps(preview, ensure_ascii=False, indent=2)
+            self._append_server_log(log_bridge("callback", result=preview, source="client"))
         else:
             self.bridge_msg = str(result)
             self._append_server_log(log_bridge("callback", result=result, source="client"))
@@ -337,10 +400,10 @@ def _debug_block(title: str, content) -> rx.Component:
 
 def _native_panel() -> rx.Component:
     return rx.vstack(
-        rx.text("Phase 2 · 原生桥 + 调试", size="2", color=_MUTED),
+        rx.text("Phase 2–3 · 原生桥 + 调试", size="2", color=_MUTED),
         rx.text(
-            "壳内测试：点按钮后看下方日志。"
-            "后端终端也会打印 reflex_capacitor.bridge 日志。",
+            "P0 基础能力 + P1（偏好 / 相机 / 定位 / 浏览器 / 沙箱文件）。"
+            "继续用 CI 打 APK 测试；真机热重载（dev）可回家再试。",
             size="2",
             color=_MUTED,
         ),
@@ -375,12 +438,24 @@ def _native_panel() -> rx.Component:
         rx.separator(size="4", color_scheme="gray"),
         _native_btn("本地通知", "bell", State.run_notify),
         _native_btn("Toast", "message-square", State.run_toast),
-        _native_btn("触觉反馈", "vibrate", State.run_haptics),
+        _native_btn("轻触反馈 (HEAVY)", "vibrate", State.run_haptics),
+        _native_btn("长震动 400ms", "smartphone", State.run_haptics_vibrate),
         _native_btn("分享", "share-2", State.run_share),
         _native_btn("写入剪贴板", "clipboard-copy", State.run_clipboard_write),
         _native_btn("读取剪贴板", "clipboard", State.run_clipboard_read),
         _native_btn("设备信息", "cpu", State.run_device_info),
         _native_btn("网络状态", "wifi", State.run_network_status),
+        rx.separator(size="4", color_scheme="gray"),
+        rx.text("Phase 3 · P1", size="2", weight="bold", color=_ACCENT),
+        _native_btn("写入偏好 shell_demo", "bookmark", State.run_pref_set),
+        _native_btn("读取偏好 shell_demo", "bookmark-check", State.run_pref_get),
+        _native_btn("拍照 (dataUrl)", "camera", State.run_take_photo),
+        _native_btn("相册选图", "images", State.run_pick_images),
+        _native_btn("当前定位", "map-pin", State.run_geolocation),
+        _native_btn("打开 reflex.dev", "globe", State.run_browser),
+        _native_btn("沙箱写文件", "file-plus", State.run_fs_write),
+        _native_btn("沙箱读文件", "file-text", State.run_fs_read),
+        _native_btn("隐藏键盘", "keyboard", State.run_keyboard_hide),
         _debug_block("最近一次回调结果", State.bridge_msg),
         spacing="3",
         width="100%",
@@ -394,7 +469,7 @@ def _me_panel() -> rx.Component:
             rx.avatar(fallback="S", size="4", color_scheme="teal"),
             rx.vstack(
                 rx.text("Shell 用户", weight="bold", color=_INK),
-                rx.text("Phase 2 · remote + native bridge", size="2", color=_MUTED),
+                rx.text("Phase 3 · remote + P0/P1 bridge", size="2", color=_MUTED),
                 spacing="0",
                 align="start",
             ),
