@@ -1,11 +1,6 @@
-# Build a debug APK. Backend URL comes from GitHub Environment secrets
-# (not hard-coded in the workflow), so lan / staging / production stay separate.
-#
-# Setup (once per environment):
-#   Settings → Environments → New environment  (e.g. lan, staging, production)
-#   Add Environment secret:  REFLEX_BACKEND_URL = https://…  (or http://192.168.x.x:8001)
-#
-# Run: Actions → Android APK → Run workflow → pick Environment
+# Build a debug APK for LAN testing.
+# Backend URL is hardcoded for now so we can verify cleartext HTTP works on device.
+# (Environment secret REFLEX_BACKEND_URL can be restored later.)
 
 name: Android APK
 
@@ -13,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       target_env:
-        description: "GitHub Environment that provides secret REFLEX_BACKEND_URL"
+        description: "Label for the artifact (lan / staging / production)"
         type: choice
         required: true
         default: lan
@@ -29,16 +24,14 @@ permissions:
   contents: read
 
 concurrency:
-  group: android-apk-${{ github.workflow }}-${{ github.event.inputs.target_env || 'staging' }}-${{ github.ref }}
+  group: android-apk-${{ github.workflow }}-${{ github.event.inputs.target_env || 'lan' }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build-apk:
-    name: APK (${{ github.event.inputs.target_env || 'staging' }})
+    name: APK (${{ github.event.inputs.target_env || 'lan' }})
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    # Binds this job to an Environment so secrets.REFLEX_BACKEND_URL is env-scoped.
-    environment: ${{ github.event.inputs.target_env || 'staging' }}
 
     steps:
       - name: Checkout
@@ -68,19 +61,13 @@ jobs:
           uv sync
           uv pip install -e .
 
-      - name: Require REFLEX_BACKEND_URL secret
+      - name: Set hardcoded LAN backend URL
         id: backend
-        env:
-          REFLEX_BACKEND_URL: ${{ secrets.REFLEX_BACKEND_URL }}
         run: |
-          if [ -z "$REFLEX_BACKEND_URL" ]; then
-            echo "::error::Missing Environment secret REFLEX_BACKEND_URL for environment '${{ github.event.inputs.target_env || 'staging' }}'."
-            echo "::error::Create it under Settings → Environments → (this env) → Environment secrets."
-            exit 1
-          fi
-          # Do not echo the full URL if it contains credentials; print host-ish only.
-          echo "url=$REFLEX_BACKEND_URL" >> "$GITHUB_OUTPUT"
-          echo "Using REFLEX_BACKEND_URL from environment (length ${#REFLEX_BACKEND_URL})"
+          # Temporary hardcode for device LAN testing.
+          URL="http://192.168.1.56:8001"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "Baking backend: $URL"
 
       - name: Scaffold Capacitor + Android
         run: uv run reflex-capacitor init --platform android
@@ -89,6 +76,34 @@ jobs:
         env:
           REFLEX_CAPACITOR_DEV_BACKEND_URL: ${{ steps.backend.outputs.url }}
         run: uv run reflex-capacitor sync
+
+      - name: Force Android cleartext for http backend
+        run: |
+          uv run python -c "
+          from pathlib import Path
+          from reflex_base.config import get_config
+          from reflex_capacitor.plugin import CapacitorPlugin
+          plugin = next(p for p in get_config().plugins if isinstance(p, CapacitorPlugin))
+          plugin.ensure_android_cleartext(Path('capacitor').resolve())
+          "
+
+      - name: Verify baked backend + cleartext
+        run: |
+          set -e
+          echo "== capacitor.config.json =="
+          cat capacitor/capacitor.config.json
+          echo
+          echo "== reflex-env (baked URLs) =="
+          ENV_JS=$(ls capacitor/www/assets/reflex-env-*.js | head -n1)
+          echo "file: $ENV_JS"
+          cat "$ENV_JS"
+          echo
+          grep -q '192.168.1.56:8001' "$ENV_JS"
+          grep -q '"cleartext": true' capacitor/capacitor.config.json
+          echo "== AndroidManifest cleartext =="
+          grep -n 'usesCleartextTraffic\|INTERNET' capacitor/android/app/src/main/AndroidManifest.xml
+          grep -q 'usesCleartextTraffic="true"' capacitor/android/app/src/main/AndroidManifest.xml
+          echo "OK: backend URL baked and cleartext enabled"
 
       - name: Assemble debug APK
         working-directory: capacitor/android
@@ -99,7 +114,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug-${{ github.event.inputs.target_env || 'staging' }}
+          name: app-debug-${{ github.event.inputs.target_env || 'lan' }}
           path: capacitor/android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14

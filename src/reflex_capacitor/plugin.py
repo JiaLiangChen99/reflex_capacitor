@@ -167,14 +167,47 @@ class CapacitorPlugin(Plugin):
         conf["webDir"] = self.web_dir
         server = conf.setdefault("server", {})
         server.setdefault("androidScheme", "https")
-        # Android blocks cleartext (http) by default; flip on when the baked backend is http://
-        # (LAN / CI debug). HTTPS backends leave cleartext off.
+        # Android blocks cleartext (http) by default from API 28+. Capacitor's
+        # ``server.cleartext`` maps to ``android:usesCleartextTraffic`` on sync.
+        # Without it the WebView can load, but every http(s) API/WS call to a LAN
+        # backend fails even though the phone browser can open the same URL.
         base = self._backend_base()
         if base and base.startswith("http://"):
             server["cleartext"] = True
         elif base and base.startswith("https://"):
             server["cleartext"] = False
         conf_path.write_text(json.dumps(conf, indent=2) + "\n", encoding="utf-8")
+
+    def ensure_android_cleartext(self, project_root: Path | None = None) -> None:
+        """Force ``usesCleartextTraffic`` when the backend is plain HTTP.
+
+        Capacitor usually applies this from ``server.cleartext`` during ``cap sync``,
+        but we patch the manifest as a safety net so LAN ``http://`` backends work.
+        """
+        base = self._backend_base()
+        if not base or not base.startswith("http://"):
+            return
+        root = project_root or (Path.cwd() / self.capacitor_dir).resolve()
+        manifest = root / "android" / "app" / "src" / "main" / "AndroidManifest.xml"
+        if not manifest.is_file():
+            return
+        text = manifest.read_text(encoding="utf-8")
+        if "usesCleartextTraffic" in text:
+            return
+        # Insert on the <application ...> opening tag.
+        patched = text.replace(
+            "<application",
+            '<application\n        android:usesCleartextTraffic="true"',
+            1,
+        )
+        if patched == text:
+            return
+        manifest.write_text(patched, encoding="utf-8")
+        from reflex_base.utils import console
+
+        console.info(
+            "reflex-capacitor: enabled android:usesCleartextTraffic for http backend"
+        )
 
     def _apply_package_json(self, pkg_path: Path, app_name: str) -> None:
         """Ensure core Capacitor dependencies are declared."""

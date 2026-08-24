@@ -246,6 +246,8 @@ def sync(app_dir: str, skip_export: bool, platforms: tuple[str, ...]) -> None:
 
     # If a platform was added earlier, sync it; if none yet, still sync core.
     _cap_sync(cap_root)
+    # Safety net: Android blocks http:// API calls unless cleartext is on.
+    plugin.ensure_android_cleartext(cap_root)
 
     if plugin.backend_url:
         click.echo(f"reflex-capacitor: remote backend → {plugin.backend_url}")
