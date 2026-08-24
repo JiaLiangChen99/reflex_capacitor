@@ -13,7 +13,7 @@ reflex-capacitor run android          # debug on device/emulator
 reflex-capacitor build android        # release APK/AAB
 ```
 
-Design notes: [`docs/`](docs/) · Roadmap: [`docs/04-roadmap.md`](docs/04-roadmap.md)
+Design notes: [`docs/`](docs/) · **Start here:** [`docs/00-getting-started.md`](docs/00-getting-started.md) · [CHANGELOG.md](CHANGELOG.md)
 
 ## Wire it up
 

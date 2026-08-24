@@ -1,6 +1,7 @@
 # Bridge 调试指南
 
-Phase 2 原生桥自带 **客户端日志环** 与 **后端 Python 日志**，方便真机 APK 测试。
+Phase 2+ 原生桥自带 **客户端日志环** 与 **后端 Python 日志**，方便真机 APK 测试。  
+快速上手见 [00-getting-started.md](00-getting-started.md)。
 
 ## App 内查看（推荐）
 

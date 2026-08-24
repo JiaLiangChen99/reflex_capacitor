@@ -5,6 +5,7 @@
 
 相关文档：
 
+- **快速上手** → [00-getting-started.md](00-getting-started.md)
 - 架构总览 → [01-architecture.md](01-architecture.md)
 - 原生桥 API 设计 → [02-native-bridge.md](02-native-bridge.md)
 - 开发踩坑 → [03-development-plan.md](03-development-plan.md)
@@ -29,17 +30,17 @@
 
 ### Phase 1 相对架构文档仍缺（不阻塞，记入后续）
 
-| 项 | 计划阶段 |
-|----|----------|
-| `mobile.py` / `mobile.pyi` | Phase 2 |
-| `reflex-capacitor-bridge.js` + HTML 注入 | Phase 2 |
-| `CapacitorPlugin(plugins=(...))` | Phase 2 |
+| 项 | 状态 |
+|----|------|
+| `mobile.py` / `mobile.pyi` | Phase 2 ✅ |
+| `bridge.js` + HTML 注入 | Phase 2 ✅ |
+| `CapacitorPlugin(plugins=(...))` | Phase 2 ✅ |
 | `CapacitorPlugin(icon=...)` | Phase 2 ✅ |
-| `reflex-capacitor dev` | Phase 3 |
-| `reflex-capacitor build`（release） | Phase 4 |
-| 单元测试 | Phase 2 ✅（基础） / Phase 3（扩展） |
-| CI 恢复 Environment Secret | Phase 2 ✅ |
-| iOS 真机验证 | Phase 3 |
+| `reflex-capacitor dev` | Phase 3 ✅ |
+| `reflex-capacitor build`（release） | Phase 4 ✅ |
+| 单元测试 | Phase 2–4 ✅ |
+| CI Environment Secret | Phase 2 ✅ |
+| iOS 真机验证 | 需 Mac ⬜ |
 
 ### Phase 1 踩坑备忘（已实现，文档化）
 
@@ -119,7 +120,7 @@
 
 ---
 
-## Phase 3 — 原生桥 P1 + 开发体验
+## Phase 3 — 原生桥 P1 + 开发体验 ✅
 
 **目标**：常用设备能力 + 真机热重载 + 可扩展 + 测试。
 
@@ -139,7 +140,8 @@
 
 - [x] 实现 P1 API（bridge.js + `mobile.*`）
 - [x] demo 演示 P1（偏好 / 相机 / 定位 / 浏览器 / 沙箱文件）
-- [ ] demo 演示拍照 / 定位（可选页）→ 已合并进原生 Tab
+- [x] 内置图片编辑器（自由裁剪、捏合缩放）— [image-editor.md](image-editor.md)
+- [x] `capture_and_edit` / `edit_image` / `ImageEditorOptions` 组件
 
 ### 3.2 `reflex-capacitor dev`
 
@@ -167,7 +169,7 @@
 
 ---
 
-## Phase 4 — 加固与发布
+## Phase 4 — 加固与发布 ✅（核心）
 
 **目标**：可上架、可运维、可扩展。
 
@@ -239,6 +241,9 @@ Phase 4    release 构建 + 签名文档 + 推送等 + CI 加固
 | `.github/workflows/android-apk.yml` | 2 ✅（Environment matrix） |
 | `docs/permissions.md` / `docs/debug.md` | 2 ✅ |
 | `docs/dev-reload.md` | 3 ✅ |
+| `src/reflex_capacitor/components/` | 3 ✅ 图片编辑器 |
+| `docs/00-getting-started.md` | 总览 ✅ |
+| `docs/image-editor.md` | 3 ✅ |
 | `docs/publishing.md` | 4 ✅ |
 | `CHANGELOG.md` | 4 ✅ |
 | `.github/workflows/android-release-aab.yml` | 4 ✅ |

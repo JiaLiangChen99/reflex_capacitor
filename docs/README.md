@@ -2,21 +2,30 @@
 
 将 Reflex Web 应用包装为 **Capacitor 移动 App**（iOS / Android）的设计与开发要点。
 
-> **范围**：仅 **remote** 模式（静态前端进壳，Python 后端跑在服务器）。不提供桌面版 `embedded`（进程内嵌 CPython）对等物——移动端不现实，也非本项目目标。
+> **范围**：仅 **remote** 模式（静态前端进壳，Python 后端跑在服务器）。  
+> **当前进度**：Phase 1–4 核心已完成（2026-08-24），详见 [04-roadmap.md](04-roadmap.md)。
+
+## 从这里开始
+
+👉 **[00-getting-started.md](00-getting-started.md)** — 安装、配置、CI 打 APK、dev、build、文档索引（**推荐首读**）
 
 ## 文档索引
 
 | 文档 | 内容 |
 |------|------|
-| [04-roadmap.md](04-roadmap.md) | **Phase 1 回顾 + Phase 2–4 待办清单（防遗忘）** |
-| [docs/ci.md](ci.md) | GitHub Actions 打 debug APK（免本机 Android Studio） |
-| [dev-reload.md](dev-reload.md) | 真机开发 / `reflex-capacitor dev` |
-| [publishing.md](publishing.md) | Phase 4 · release 签名与上架 |
-| [01-architecture.md](01-architecture.md) | 对标 reflex-desktop 的架构、模块划分、数据流 |
-| [02-native-bridge.md](02-native-bridge.md) | 原生能力清单、与 `desktop.py` 的映射、`mobile.py` API 设计 |
-| [03-development-plan.md](03-development-plan.md) | 开发要点、脚手架、CLI、分阶段交付、风险 |
+| [00-getting-started.md](00-getting-started.md) | **快速上手**（Phase 1–4 总览） |
+| [04-roadmap.md](04-roadmap.md) | 各 Phase 完成情况与待办 |
+| [01-architecture.md](01-architecture.md) | 架构、模块、数据流 |
+| [02-native-bridge.md](02-native-bridge.md) | `mobile.*` API 与 bridge 设计 |
+| [03-development-plan.md](03-development-plan.md) | 开发决策与踩坑 |
+| [ci.md](ci.md) | GitHub Actions：debug APK / release AAB |
+| [dev-reload.md](dev-reload.md) | `reflex-capacitor dev` 真机开发 |
+| [publishing.md](publishing.md) | Release 签名、Play 上架、iOS 概要 |
+| [debug.md](debug.md) | 真机调试、日志、WebSocket 问题 |
+| [permissions.md](permissions.md) | 各插件 Android/iOS 权限 |
+| [image-editor.md](image-editor.md) | 内置图片编辑器（本机裁剪/压缩） |
 
-Phase 1（壳 + 远程后端）已落地：见 [04-roadmap.md](04-roadmap.md) 与根目录 `README.md`。
+根目录 [README.md](../README.md) · [CHANGELOG.md](../CHANGELOG.md)
 
 ## 一句话目标
 
@@ -24,8 +33,14 @@ Phase 1（壳 + 远程后端）已落地：见 [04-roadmap.md](04-roadmap.md) �
 同一套 Reflex 页面 / State / 事件
   → reflex export 静态前端
   → Capacitor WebView 加载
-  → 连云端 Reflex 后端
-  → 需要时用 mobile.* 调 Cap 原生插件（通知、相机、分享…）
+  → 连远程 Reflex 后端
+  → mobile.* 调原生能力（通知、相机、定位…）
 ```
 
-对用户而言：`pip install reflex-capacitor` 后，在 `rxconfig.py` 挂上 `CapacitorPlugin`，执行 `reflex-capacitor run android|ios` 即可在模拟器/真机打开 App。
+## 平台支持
+
+| | Android（Windows 可开发） | iOS（需 Mac） |
+|--|---------------------------|---------------|
+| 本地 CLI | ✅ | ❌ |
+| CI 打 debug 包 | ✅ | 未配置 |
+| 生产 release | ✅ AAB/APK | 需本机 Xcode |
