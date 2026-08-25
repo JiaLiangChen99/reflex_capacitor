@@ -1,5 +1,7 @@
 # CI：Android debug APK
 
+> 最后更新：2026-08-25 · 本机构建见 [android-build.md](android-build.md) · 总索引 [README.md](../README.md)
+
 GitHub Actions 按 **Environment** 烘焙不同后端 URL，打 debug APK。
 
 ## 配置 GitHub Environments
@@ -90,3 +92,7 @@ CapacitorPlugin(
 ```
 
 需已 `reflex-capacitor init` 生成 `android/`。
+
+## 相关
+
+- [publishing.md](publishing.md) · [android-build.md](android-build.md) · [configuration.md](configuration.md) · [README.md](../README.md)

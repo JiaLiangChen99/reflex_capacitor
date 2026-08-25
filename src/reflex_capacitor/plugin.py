@@ -291,6 +291,7 @@ class CapacitorPlugin(Plugin):
             ensure_android_notification_permission,
             ensure_android_vibrate_permission,
         )
+        from .bridge.ios_plist import apply_ios_plugin_permissions
 
         root = (project_root or (Path.cwd() / self.capacitor_dir)).resolve()
         www = root / self.web_dir
@@ -304,12 +305,20 @@ class CapacitorPlugin(Plugin):
         manifest = root / "android" / "app" / "src" / "main" / "AndroidManifest.xml"
         if "local-notifications" in self._resolved_plugins():
             ensure_android_notification_permission(manifest)
+        if "push-notifications" in self._resolved_plugins():
+            ensure_android_notification_permission(manifest)
         if "haptics" in self._resolved_plugins():
             ensure_android_vibrate_permission(manifest)
         if "camera" in self._resolved_plugins():
             ensure_android_camera_permissions(manifest)
         if "geolocation" in self._resolved_plugins():
             ensure_android_location_permissions(manifest)
+
+        ios_added = apply_ios_plugin_permissions(root, self._resolved_plugins())
+        if ios_added:
+            console.info(
+                f"reflex-capacitor: patched iOS Info.plist keys: {', '.join(ios_added)}"
+            )
 
         self._apply_icon(root)
 

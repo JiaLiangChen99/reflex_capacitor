@@ -1,4 +1,7 @@
-# 原生桥接设计：mobile.py 与 Capacitor 插件
+# 原生桥接：mobile.py 与 Capacitor 插件
+
+> 最后更新：2026-08-25  
+> **用法 + 能力表**（本文）· 打包注入原理 → [packaging.md](../design/packaging.md) · 权限 → [permissions.md](permissions.md) · 配置分层 → [configuration.md](configuration.md)
 
 ## 1. 先澄清：不是「Reflex UI 组件」
 
@@ -39,7 +42,7 @@ Reflex `export` 产出的是静态 HTML/JS，**不会**自动把 Capacitor npm �
 在拷贝到 `www/` 后注入：
 
 1. Capacitor 运行时（`cap sync` 已处理原生侧）。
-2. 本包自带的 `reflex-capacitor-bridge.js`，挂载：
+2. 本包自带的 `bridge.js`（路径：`www/assets/reflex-capacitor/bridge.js`），挂载：
 
 ```js
 // 伪代码：稳定 API，屏蔽各插件版本差异
@@ -57,14 +60,15 @@ window.__REFLEX_CAPACITOR__ = {
 };
 ```
 
-`mobile.py` **只**调用 `__REFLEX_CAPACITOR__`，不对齐各插件原始方法名（类似 desktop 统一封装 `__TAURI__`）。
+`mobile.*`（`bridge/api.py`）**只**调用 `__REFLEX_CAPACITOR__`，不对齐各插件原始方法名。
 
 注入方式（`post_build` / `sync`）：
 
-- 复制 `reflex-capacitor-bridge.js` → `www/assets/`
-- 在 `index.html` 的 `</body>` 前插入 `<script src="./assets/reflex-capacitor-bridge.js"></script>`（幂等：有标记则跳过）
+- 复制 `bridge.js` → `www/assets/reflex-capacitor/`
+- 在 `index.html` 插入带 marker 的 `<script src="…/bridge.js">`（幂等）
+- `finalize_bridge`：从 `node_modules` 拷 vendor、补 Manifest / Info.plist
 
-Bridge 内部用 `Capacitor.Plugins` 或动态 `registerPlugin`（视 Cap 大版本而定，实现时以当时官方文档为准）。
+详见 [packaging.md](../design/packaging.md)。
 
 ### 2.3 浏览器降级
 
@@ -104,10 +108,10 @@ Bridge 内部用 `Capacitor.Plugins` 或动态 `registerPlugin`（视 Cap 大版
 | 相机 | `@capacitor/camera` | `take_photo(callback, …)` / `pick_images(callback)` | P1 |
 | 定位 | `@capacitor/geolocation` | `get_current_position(callback)` | P1 |
 | 键盘 | `@capacitor/keyboard` | `keyboard_show/hide`；事件见 §5 | P1 |
-| 推送 | `@capacitor/push-notifications` | `push_register` + 事件 | P2 |
-| 生物识别 | community / `@capawesome/...` | `biometric_verify(callback)` | P2 |
-| 条码扫描 | community | `scan_barcode(callback)` | P2 |
-| 应用内浏览器 | `@capacitor/browser` | `browser_open(url)` | P2 |
+| 推送 | `@capacitor/push-notifications` | `push_register` + 事件 | **可选**（PHASE5） |
+| 生物识别 | community / `@capawesome/...` | `biometric_verify(callback)` | 未做 |
+| 条码扫描 | community | `scan_barcode(callback)` | 未做 |
+| 应用内浏览器 | `@capacitor/browser` | `browser_open(url)` | P1（EXTENDED） |
 
 > **「组件」**：Capacitor 官方几乎都是 **命令式 Plugin API**，不是 React Native 那种 `<Camera />` 组件。Google Maps 等少数带 Web Component；MVP **不包地图组件**，需要时再单独立项。
 
@@ -167,74 +171,70 @@ def invoke(command: str, args: Mapping | None = None, *, callback=None) -> Event
 
 ### 4.4 类型桩
 
-提供 `mobile.pyi`，与 desktop 一样让编辑器补全。
+提供 `bridge/api.pyi`（经 `mobile` 导出），便于编辑器补全。
 
 ---
 
-## 5. 原生 → Reflex 的反向事件（Phase 3 ✅）
+## 5. 原生 → Reflex 的反向事件
 
 移动端常见：
 
 - 物理返回键（Android）
 - App 进入后台 / 前台
 - 键盘显隐
-- 深链 `appUrlOpen`（预留）
+- 深链 `appUrlOpen`
 
-实现（Phase 3）：
+实现：
 
 1. App 启动时调用 `mobile.setup_native_listeners(back_button="emit")` 注册 Capacitor 监听。
 2. 用 `mobile.poll_native_events(callback)` 取出事件队列（`[{ts, type, detail}, …]`）。
 3. `back_button`：`emit`（默认，入队）| `exit` | `history`。
 
-详见 [dev-reload.md](dev-reload.md)。推送点击仍属 Phase 4（`push-notifications`）。
+详见 [dev-reload.md](dev-reload.md)。深链 → [deep-linking.md](deep-linking.md)；推送（可选）→ [push-notifications.md](push-notifications.md)。
 
 ---
 
-## 6. 权限与清单（开发必做）
+## 6. 权限与清单
 
-每个启用的插件，脚手架/`post_build` 应尽可能写入：
-
-| 平台 | 动作 |
-|------|------|
-| iOS | `Info.plist` 用途字符串（相机、定位、麦克风、相册…） |
-| Android | `AndroidManifest.xml` permissions；部分需 runtime 请求 |
-| 两端 | 首次调用前 `requestPermissions`（bridge 内统一做） |
-
-`CapacitorPlugin(plugins=(...))` 决定安装哪些 npm 包 **以及** 是否生成对应权限片段（可用托管区注释标记，幂等更新）。
+每个启用的插件，`finalize_bridge` 会尽可能写入 Manifest / Info.plist。完整表 → [permissions.md](permissions.md)。  
+`CapacitorPlugin(plugins=(...))` 决定 npm 包 **以及** 权限片段（幂等）。分层常量 → [configuration.md](configuration.md)。
 
 ---
 
-## 7. 推荐默认插件集（开箱）
+## 7. 推荐默认插件集
 
-与「大部分联网 App」匹配的默认 `plugins`：
+| 层级 | 常量 | 典型内容 |
+|------|------|----------|
+| 核心 | `CORE_PLUGIN_IDS` | app、splash、status-bar、notify、toast、haptics、clipboard、share、device、network |
+| 扩展 | `EXTENDED_PLUGIN_IDS` | camera、geolocation、filesystem、preferences、keyboard、browser |
+| 推荐默认 | `ALL_PLUGIN_IDS` | CORE + EXTENDED（**不含**推送） |
+| 可选 | `PHASE5_PLUGIN_IDS` | `push-notifications`（需自备 FCM/APNs） |
 
-```text
-app, splash-screen, status-bar,
-local-notifications, toast, haptics,
-clipboard, share,
-device, network,
-keyboard
+---
+
+## 8. Demo 应演示的能力
+
+仓库 `demo/` 的「原生」Tab 覆盖：
+
+- `mobile.notify` / `toast` / `haptics_*` / `share` / clipboard
+- `device_info` / `network_status` / `platform_info`
+- `take_photo` / 定位 / 偏好 / 反向事件（返回键、深链展示）
+- 可选：推送注册（需 Firebase）
+
+---
+
+## 9. 图片编辑器（可选）
+
+本机裁剪/压缩，默认不上传云端：
+
+```python
+mobile.capture_and_edit(State.on_edited, source="camera")
 ```
 
-按需开启（增大包体 / 审核敏感）：
-
-```text
-camera, geolocation, filesystem, preferences,
-push-notifications
-```
+详见 demo「原生」Tab；推荐 `return_data_url=False` + 沙箱路径，避免大图经 WebSocket 回传后端。
 
 ---
 
-## 8. Example 应用应演示的能力（对标 example/counter）
+## 相关
 
-在 `example/` 中做一页 **Native**，按钮调用：
-
-- `mobile.notify`
-- `mobile.toast` / `mobile.haptics_impact`
-- `mobile.share`
-- `mobile.clipboard_write` + `clipboard_read`
-- `mobile.status_bar_set_style`
-- `mobile.device_info` / `network_status`（callback 显示在 State）
-- （P1）`mobile.take_photo`
-
-并注明：后端可为任意已部署 Reflex URL；example 可用 remote mock 或官方 demo 后端。
+- [configuration.md](configuration.md) · [packaging.md](../design/packaging.md) · [permissions.md](permissions.md) · [docs/README.md](../README.md)

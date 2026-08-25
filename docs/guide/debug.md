@@ -1,7 +1,9 @@
 # Bridge 调试指南
 
-Phase 2+ 原生桥自带 **客户端日志环** 与 **后端 Python 日志**，方便真机 APK 测试。  
-快速上手见 [00-getting-started.md](00-getting-started.md)。
+> 最后更新：2026-08-25 · 总索引 [README.md](../README.md)
+
+原生桥自带 **客户端日志环** 与 **后端 Python 日志**，方便真机 APK 测试。  
+上手 → [00-getting-started.md](00-getting-started.md) · 本机环境 → [android-build.md](android-build.md)
 
 ## App 内查看（推荐）
 
@@ -68,3 +70,9 @@ Android 真机 USB 调试时，Chrome 打开 `chrome://inspect` 可查看 WebVie
 | `pluginsMissing` 非空 | `npm install` / `finalize_bridge` 未跑，vendor JS 缺失 |
 | 客户端有日志、服务端无 | 正常：void 调用（notify/toast）只在 WebView 执行；带 callback 的才会回后端 |
 | `isNative: false` | 在浏览器打开，非 Capacitor 壳 |
+| WebSocket / 连不上后端 | 后端 `0.0.0.0`、同 Wi‑Fi、HTTP 需 cleartext；见 [android-build.md](android-build.md) |
+| Gradle / 缺 SDK | `reflex-capacitor check --android` |
+
+## 相关
+
+- [cli.md](cli.md) · [02-native-bridge.md](02-native-bridge.md) · [../design/testing.md](../design/testing.md) · [README.md](../README.md)

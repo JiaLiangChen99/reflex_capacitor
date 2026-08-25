@@ -1,21 +1,26 @@
-# Package a Reflex app as a Capacitor mobile app (remote backend).
+# Package a Reflex app as a Capacitor mobile app
 
-Ship the same Reflex frontend you already have into an iOS / Android WebView via
+Ship the same Reflex frontend into an iOS / Android WebView via
 [Capacitor](https://capacitorjs.com), talking to a **hosted** Reflex backend over HTTPS/WSS.
 
+**Docs (Chinese howto / design / roadmap):** [`docs/README.md`](docs/README.md) ·
+**Start here:** [`docs/guide/00-getting-started.md`](docs/guide/00-getting-started.md) ·
+[FAQ](docs/guide/faq.md) · [Install & PyPI](docs/guide/install.md) · [CHANGELOG](CHANGELOG.md)
+
 ```bash
-pip install -e .
-reflex-capacitor doctor
+pip install reflex-capacitor   # or: pip install -e .
+reflex-capacitor check --android
 reflex-capacitor init --platform android
-# configure CapacitorPlugin(backend_url=...) in rxconfig.py
+# set CapacitorPlugin(backend_url=...) in rxconfig.py
 reflex-capacitor sync
-reflex-capacitor run android          # debug on device/emulator
-reflex-capacitor build android        # release APK/AAB
+reflex-capacitor run android           # device / emulator
+reflex-capacitor build android --debug # APK
 ```
 
-Design notes: [`docs/`](docs/) · **Start here:** [`docs/00-getting-started.md`](docs/00-getting-started.md) · [CHANGELOG.md](CHANGELOG.md)
+Host toolchains (Node / JDK / Android SDK / Xcode) are **detected, never auto-installed**.
+See [`docs/guide/cli.md`](docs/guide/cli.md) and [`docs/guide/install.md`](docs/guide/install.md).
 
-## Wire it up
+## Configure
 
 ```python
 # rxconfig.py
@@ -25,73 +30,78 @@ from reflex_capacitor.bridge.plugins import ALL_PLUGIN_IDS
 
 config = rx.Config(
     app_name="demo",
-    cors_allowed_origins=["*"],  # production: restrict to your API + Capacitor origins
+    cors_allowed_origins=["*"],  # tighten in production
     plugins=[
         CapacitorPlugin(
             backend_url="https://api.example.com",
             app_id="com.example.myapp",
             app_name="My App",
-            plugins=ALL_PLUGIN_IDS,
+            plugins=ALL_PLUGIN_IDS,  # default in code is CORE only; ALL recommended
         ),
     ],
 )
 ```
 
+Push notifications are **opt-in** (`PHASE5_PLUGIN_IDS`). Details:
+[`docs/guide/configuration.md`](docs/guide/configuration.md),
+[`docs/guide/push-notifications.md`](docs/guide/push-notifications.md).
+
 ## Commands
 
 | Command | Purpose |
 |---------|---------|
-| `reflex-capacitor doctor` | Check Node / npm / optional Android SDK |
-| `reflex-capacitor init` | Scaffold `capacitor/`, `npm install`, `cap add` |
-| `reflex-capacitor sync` | `reflex export` → `www/` → `npx cap sync` |
-| `reflex-capacitor run android\|ios` | Sync + launch on device/emulator |
-| `reflex-capacitor dev android` | LAN dev: export + backend on `0.0.0.0` + run ([dev-reload.md](docs/dev-reload.md)) |
-| `reflex-capacitor build android\|ios` | Release/debug APK, AAB, or iOS archive ([publishing.md](docs/publishing.md)) |
-| `reflex-capacitor open android\|ios` | Open Android Studio / Xcode |
+| `doctor` / `check` | Host dependency report (`--android`, `--device`, `--ios`) |
+| `init` | Scaffold `capacitor/`, `npm install`, `cap add` |
+| `sync` | `reflex export` → `www/` → `npx cap sync` |
+| `run` / `dev` | Sync + launch (dev: LAN backend helper) |
+| `build` | Release/debug APK, AAB, or iOS archive |
+| `open` | Open Android Studio / Xcode |
 
-On Windows, **Android** is the practical target; iOS needs macOS.
+Proxy for npm/Gradle (off by default): `--proxy URL` or `REFLEX_CAPACITOR_PROXY`.
 
-## Python API (`mobile.*`)
+Full CLI: [`docs/guide/cli.md`](docs/guide/cli.md) · Dev reload: [`docs/guide/dev-reload.md`](docs/guide/dev-reload.md) ·
+Store signing: [`docs/guide/publishing.md`](docs/guide/publishing.md)
+
+## Python API
 
 ```python
 from reflex_capacitor import mobile
 
-# P0 — notify, toast, share, clipboard, device, …
 mobile.notify("Hello", "From Reflex")
-
-# P1 — camera, geolocation, preferences, filesystem, …
 mobile.get_current_position(State.on_gps)
-
-# Phase 3 — native → Reflex events
 mobile.setup_native_listeners(back_button="emit")
 mobile.poll_native_events(State.on_native_events)
 ```
 
-Full API: [`docs/02-native-bridge.md`](docs/02-native-bridge.md)
+API map: [`docs/guide/02-native-bridge.md`](docs/guide/02-native-bridge.md)
+
+## Backend URL
+
+| Environment | URL | Notes |
+|-------------|-----|-------|
+| Production | `https://…` | WSS; required for store builds |
+| LAN | `http://192.168.x.x:port` | cleartext + `androidScheme: http` (automatic) |
+| Emulator → host | `http://10.0.2.2:8000` | Android emulator loopback |
+
+Network & CORS: [`docs/guide/configuration.md`](docs/guide/configuration.md)
 
 ## Layout
 
 | Path | Role |
 |------|------|
 | `src/reflex_capacitor/` | Library (`CapacitorPlugin`, CLI, bridge) |
-| `demo/` | Sample Reflex app |
+| `demo/` | Sample app |
 | `capacitor/` | Generated Capacitor project (after `init`) |
-
-## Backend URL
-
-| Environment | URL | Notes |
-|-------------|-----|-------|
-| Production | `https://…` | WSS event; required for store builds |
-| LAN dev | `http://192.168.x.x:8001` | Needs cleartext + `androidScheme: http` (auto) |
-| Emulator → host | `http://10.0.2.2:8000` | Android emulator loopback |
+| `docs/` | Docs hub: [`docs/README.md`](docs/README.md) (`guide/` + `design/`) |
 
 ## CI
 
-- **Debug APK** — push/PR builds `lan`; manual matrix for staging/production ([ci.md](docs/ci.md))
-- **Release AAB** — manual workflow + production signing secrets ([publishing.md](docs/publishing.md))
+- Debug APK — [`docs/guide/ci.md`](docs/guide/ci.md)
+- Release AAB — [`docs/guide/publishing.md`](docs/guide/publishing.md)
 
 ## Limitations
 
 - **Remote backend only** — no embedded Python on device
-- **Not a mobile UI kit** — use Reflex components + `mobile.*` bridge
-- Push notifications / biometrics — Phase 4+ optional ([roadmap](docs/04-roadmap.md))
+- **Not a mobile UI kit** — Reflex UI + `mobile.*` bridge
+- **Android-first** — iOS needs macOS; no iOS CI in this repo yet
+- Host SDKs checked by `check`, never installed by this tool

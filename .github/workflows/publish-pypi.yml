@@ -1,0 +1,94 @@
+# Publish reflex-capacitor to PyPI when a GitHub Release is published.
+#
+# Prerequisites (one-time):
+#   1. PyPI account + project name "reflex-capacitor" reserved (first upload creates it).
+#   2. PyPI API token → https://pypi.org/manage/account/token/
+#      (first release: use "Entire account" scope; later you may use project-scoped tokens)
+#   3. GitHub repo secret: PYPI_API_TOKEN
+#      Settings → Secrets and variables → Actions → New repository secret
+#
+# Release flow:
+#   1. Bump version in pyproject.toml (must match the git tag, e.g. 0.2.0 ↔ v0.2.0)
+#   2. Update CHANGELOG.md, commit, push
+#   3. GitHub → Releases → Draft new release → tag v0.2.0 → Publish release
+#   4. This workflow builds sdist+wheel and uploads to PyPI
+
+name: Publish to PyPI
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build + test deps
+        run: |
+          python -m pip install --upgrade pip build pytest
+          pip install -e ".[dev]"
+
+      - name: Run offline tests (L1)
+        run: pytest tests/ -q -m integration
+
+      - name: Build package
+        run: python -m build
+
+      - name: Verify wheel includes bridge assets and scaffold
+        run: |
+          python - <<'PY'
+          import glob
+          import zipfile
+
+          wheels = sorted(glob.glob("dist/*.whl"))
+          assert wheels, "no wheel built"
+          wheel = wheels[-1]
+          names = set(zipfile.ZipFile(wheel).namelist())
+
+          required = (
+              "reflex_capacitor/bridge/assets/bridge.js",
+              "reflex_capacitor/bridge/assets/image-editor.js",
+              "reflex_capacitor/scaffold/package.json",
+              "reflex_capacitor/scaffold/capacitor.config.json",
+          )
+          missing = [p for p in required if p not in names]
+          assert not missing, f"missing from {wheel}: {missing}"
+          print("OK: packaged in", wheel)
+          for p in required:
+              print(" ", p)
+          PY
+
+      - name: Verify tag matches pyproject version
+        run: |
+          python - <<'PY'
+          import os
+          import re
+          import tomllib
+
+          tag = os.environ["GITHUB_REF_NAME"]  # e.g. v0.2.0
+          with open("pyproject.toml", "rb") as f:
+              version = tomllib.load(f)["project"]["version"]
+          m = re.match(r"^v(.+)$", tag)
+          assert m, f"release tag must look like v1.2.3, got {tag!r}"
+          assert m.group(1) == version, f"tag {tag!r} != pyproject version {version!r}"
+          print(f"OK: tag matches pyproject version {version}")
+          PY
+        env:
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          user: __token__
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          # Token auth cannot mint attestations (needs OIDC). Keep false.
+          attestations: false

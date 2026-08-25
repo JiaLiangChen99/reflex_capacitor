@@ -118,6 +118,24 @@ def diagnostics(callback: Any) -> rx.event.EventSpec:
     return call_bridge("getDiagnostics", callback=callback)
 
 
+def platform_info(callback: Any) -> rx.event.EventSpec:
+    """Return runtime platform flags from the WebView shell.
+
+    Callback receives::
+
+        {
+            "platform": "ios" | "android" | "web",
+            "isNative": bool,
+            "isAndroid": bool,
+            "isIos": bool,
+            "isWeb": bool,
+        }
+
+    Use this in Reflex State to branch UI or call different ``mobile.*`` handlers.
+    """
+    return call_bridge("platformInfo", callback=callback)
+
+
 def bridge_logs(limit: int = 50, callback: Any = None) -> rx.event.EventSpec:
     """Fetch recent client-side bridge log entries from the WebView."""
     return call_bridge("getLogs", {"limit": limit}, callback=callback)
@@ -320,3 +338,22 @@ def poll_native_events(callback: Any) -> rx.event.EventSpec:
     Callback receives ``{events: [{ts, type, detail}, ...]}``.
     """
     return call_bridge("drainNativeEvents", callback=callback)
+
+
+def push_register(*, callback: Any = None) -> rx.event.EventSpec:
+    """Request push permission and register for FCM / APNs (requires push-notifications plugin).
+
+    Registration token arrives as a ``pushRegistration`` native event via
+    :func:`poll_native_events`.
+    """
+    return call_bridge("pushRegister", callback=callback)
+
+
+def push_check_permissions(*, callback: Any = None) -> rx.event.EventSpec:
+    """Check remote push notification permission status."""
+    return call_bridge("pushCheckPermissions", callback=callback)
+
+
+def push_request_permissions(*, callback: Any = None) -> rx.event.EventSpec:
+    """Request remote push notification permission from the user."""
+    return call_bridge("pushRequestPermissions", callback=callback)

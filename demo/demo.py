@@ -30,6 +30,8 @@ class State(rx.State):
     debug_diag: str = "进入本页或点「刷新诊断」查看 WebView / 插件状态。"
     debug_client_logs: str = "客户端日志：点原生按钮后点「刷新日志」。"
     native_events: str = "进入「原生」页后自动监听；点「刷新原生事件」查看。"
+    last_deep_link: str = "（暂无 — 配置深链后用 adb / 链接打开 App，见 docs/deep-linking.md）"
+    push_token: str = "（未注册 — 需 FCM/APNs，见 docs/push-notifications.md）"
     server_logs: list[str] = []
 
     def _append_server_log(self, line: str) -> None:
@@ -37,7 +39,10 @@ class State(rx.State):
 
     @rx.event
     def on_app_load(self):
-        return mobile.setup_native_listeners(back_button="emit")
+        return [
+            mobile.setup_native_listeners(back_button="emit"),
+            mobile.poll_native_events(State.on_native_events),
+        ]
 
     @rx.event
     def set_tab(self, tab: str):
@@ -221,9 +226,33 @@ class State(rx.State):
             return
         events = result.get("events") or []
         if not events:
-            self.native_events = "（队列为空 — 切后台/回前台或按 Android 返回键试试）"
+            self.native_events = "（队列为空 — 切后台/回前台、按返回键或注册推送试试）"
             return
+        for ev in events:
+            if not isinstance(ev, dict):
+                continue
+            ev_type = ev.get("type")
+            detail = ev.get("detail") or {}
+            if ev_type == "appUrlOpen":
+                url = detail.get("url") or ""
+                if url:
+                    self.last_deep_link = url
+            elif ev_type == "pushRegistration":
+                token = detail.get("value") or ""
+                if token:
+                    preview = token if len(token) <= 48 else f"{token[:48]}…"
+                    self.push_token = preview
+            elif ev_type == "pushRegistrationError":
+                self.push_token = f"注册失败: {detail.get('error', '?')}"
         self.native_events = json.dumps(events, ensure_ascii=False, indent=2)
+
+    @rx.event
+    def run_push_register(self):
+        self._append_server_log(log_bridge("pushRegister", source="server"))
+        return [
+            mobile.push_register(callback=State.on_bridge_result),
+            mobile.poll_native_events(State.on_native_events),
+        ]
 
     @rx.event
     def run_keyboard_hide(self):
@@ -449,9 +478,9 @@ def _debug_block(title: str, content) -> rx.Component:
 
 def _native_panel() -> rx.Component:
     return rx.vstack(
-        rx.text("Phase 2–3 · 原生桥 + 调试", size="2", color=_MUTED),
+        rx.text("Phase 2–5 · 原生桥 + 深链/推送", size="2", color=_MUTED),
         rx.text(
-            "P0 基础能力 + P1 + 反向事件（返回键 / 前后台 / 键盘）。"
+            "P0 基础能力 + P1 + 反向事件（返回键 / 前后台 / 键盘）+ Phase 5 深链与推送。"
             "真机开发可试 reflex-capacitor dev android。",
             size="2",
             color=_MUTED,
@@ -489,6 +518,8 @@ def _native_panel() -> rx.Component:
             spacing="2",
         ),
         _debug_block("诊断 (WebView)", State.debug_diag),
+        _debug_block("最近深链 (appUrlOpen)", State.last_deep_link),
+        _debug_block("推送 token (pushRegistration)", State.push_token),
         _debug_block("原生事件 (反向)", State.native_events),
         _debug_block("客户端日志 (bridge.js)", State.debug_client_logs),
         _debug_block("服务端日志 (回调到后端)", State.server_logs.join("\n")),
@@ -514,6 +545,9 @@ def _native_panel() -> rx.Component:
         _native_btn("沙箱写文件", "file-plus", State.run_fs_write),
         _native_btn("沙箱读文件", "file-text", State.run_fs_read),
         _native_btn("隐藏键盘", "keyboard", State.run_keyboard_hide),
+        rx.separator(size="4", color_scheme="gray"),
+        rx.text("Phase 5 · 深链 / 推送", size="2", weight="bold", color=_ACCENT),
+        _native_btn("注册远程推送", "radio", State.run_push_register),
         _debug_block("最近一次回调结果", State.bridge_msg),
         spacing="3",
         width="100%",

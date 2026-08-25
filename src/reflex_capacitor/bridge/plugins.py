@@ -56,6 +56,11 @@ EXTENDED_PLUGIN_IDS: Final[tuple[PluginId, ...]] = (
     "filesystem",
 )
 
+# Phase 5 — push, etc. (enable explicitly; may need FCM / APNs project setup).
+PHASE5_PLUGIN_IDS: Final[tuple[PluginId, ...]] = (
+    "push-notifications",
+)
+
 # Core + extended; used by the repo demo (rxconfig.py).
 ALL_PLUGIN_IDS: Final[tuple[PluginId, ...]] = CORE_PLUGIN_IDS + EXTENDED_PLUGIN_IDS
 
@@ -73,6 +78,7 @@ __all__ = [
     "CAPACITOR_PLUGIN_PACKAGES",
     "CORE_PLUGIN_IDS",
     "EXTENDED_PLUGIN_IDS",
+    "PHASE5_PLUGIN_IDS",
     "PluginId",
     "apply_package_json_deps",
     "copy_plugin_vendor_scripts",

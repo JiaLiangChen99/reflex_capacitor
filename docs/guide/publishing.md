@@ -1,6 +1,8 @@
 # 发布与签名
 
-> Phase 4 · 将 Reflex + Capacitor 应用上架 Google Play / App Store
+> 最后更新：2026-08-25 · 命令细节见 [cli.md](cli.md) · 总索引 [README.md](../README.md)
+
+将 Reflex + Capacitor 应用打成可上架的 release 包（Google Play / App Store）。
 
 ## 命令概览
 
@@ -120,3 +122,7 @@ reflex-capacitor build android --format aab
 - [ ] 生产 `backend_url` 为 HTTPS
 - [ ] `cors_allowed_origins` 生产环境不用 `*`（改为具体域名 + Capacitor origins）
 - [ ] Play / App Store 隐私说明与 App 实际权限一致（见 [permissions.md](permissions.md)）
+
+## 相关
+
+- [cli.md](cli.md) · [ci.md](ci.md) · [android-build.md](android-build.md) · [configuration.md](configuration.md) · [README.md](../README.md)

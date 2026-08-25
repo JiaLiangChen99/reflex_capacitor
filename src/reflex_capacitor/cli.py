@@ -6,7 +6,9 @@ import os
 import shutil
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any, TypeVar
 
 import click
 
@@ -18,6 +20,39 @@ from .android_signing import (
 )
 from .config import DEFAULT_CAPACITOR_DIR, DEV_BACKEND_URL_ENV
 from .dev_util import guess_lan_ip, wait_for_http_ok, wait_for_port
+from .network_env import PROXY_ENV_VAR, child_env, gradle_jvm_proxy_args, normalize_proxy_url
+
+# Active --proxy for this CLI invocation (None = no proxy; ambient proxy env stripped).
+_active_proxy: str | None = None
+
+F = TypeVar("F", bound=Callable[..., Any])
+
+
+def _proxy_option(f: F) -> F:
+    """Shared ``--proxy`` flag (default: off; also reads ``REFLEX_CAPACITOR_PROXY``)."""
+    return click.option(
+        "--proxy",
+        default=None,
+        envvar=PROXY_ENV_VAR,
+        help=(
+            "HTTP(S) proxy for npm / Gradle downloads only "
+            f"(env: {PROXY_ENV_VAR}). Default: no proxy "
+            "(ignores ambient http_proxy / HTTPS_PROXY)."
+        ),
+    )(f)
+
+
+def _activate_proxy(proxy: str | None) -> None:
+    """Validate and store proxy for subsequent ``_run`` / Gradle calls."""
+    global _active_proxy
+    if not proxy:
+        _active_proxy = None
+        return
+    try:
+        _active_proxy = normalize_proxy_url(proxy)
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"reflex-capacitor: using proxy {_active_proxy}")
 
 
 def _find_plugin(app_root: Path):
@@ -37,9 +72,12 @@ def _find_plugin(app_root: Path):
 
 def _run(cmd: list[str], cwd: Path, env: dict[str, str] | None = None) -> None:
     """Run a subprocess, echoing the command; abort on failure."""
+    merged = child_env(proxy=_active_proxy)
+    if env:
+        merged.update(env)
     click.echo(f"reflex-capacitor: $ {' '.join(cmd)}  (in {cwd})")
     try:
-        result = subprocess.run(cmd, cwd=cwd, check=False, env=env)
+        result = subprocess.run(cmd, cwd=cwd, check=False, env=merged)
     except FileNotFoundError as exc:
         raise click.ClickException(f"command not found: {cmd[0]} ({exc})") from exc
     if result.returncode != 0:
@@ -65,20 +103,54 @@ def _npx_cmd() -> list[str]:
     return ["npx"]
 
 
-def _preflight(*, need_android: bool = False, need_ios: bool = False) -> None:
-    """Fail fast when required Node tooling is missing."""
-    missing = preflight.failed_required(
-        preflight.run_checks(need_android=need_android, need_ios=need_ios)
+def _preflight(
+    *,
+    need_android: bool = False,
+    need_ios: bool = False,
+    need_device: bool = False,
+) -> None:
+    """Fail fast when required host tooling is missing (never auto-installs)."""
+    checks = preflight.run_checks(
+        need_android=need_android,
+        need_ios=need_ios,
+        need_device=need_device,
     )
+    missing = preflight.failed_required(checks)
     if not missing:
         return
-    lines = ["missing build prerequisites — install the following, then re-run:\n"]
-    for check in missing:
-        lines.append(f"  ✗ {check.name}: {check.detail}")
-        lines += [f"      {line}" for line in check.remediation.splitlines()]
-        lines.append("")
-    lines.append("Run `reflex-capacitor doctor` to recheck.")
-    raise click.ClickException("\n".join(lines))
+    raise click.ClickException(preflight.format_missing_report(missing))
+
+
+def _print_doctor_report(checks: list[preflight.Check]) -> None:
+    """Pretty-print check results and a missing summary."""
+    click.echo("reflex-capacitor doctor — host dependency check")
+    click.echo(
+        "(reports only; does not install Node / JDK / Android SDK / Xcode)\n"
+    )
+    for check in checks:
+        mark = click.style("ok", fg="green") if check.ok else click.style("MISSING", fg="red")
+        optional = "" if check.required else click.style(" (optional)", fg="yellow")
+        click.echo(f"  [{mark}] {check.name}{optional}: {check.detail}")
+        if not check.ok and check.remediation:
+            click.echo("\n".join(f"         {line}" for line in check.remediation.splitlines()))
+
+    missing = preflight.failed_required(checks)
+    warnings = preflight.failed_optional(checks)
+    if missing:
+        click.echo(click.style("\nRequired — still missing:", fg="red", bold=True))
+        for check in missing:
+            click.echo(f"  • {check.name}: {check.detail}")
+    if warnings:
+        click.echo(click.style("\nOptional — missing (non-blocking):", fg="yellow"))
+        for check in warnings:
+            click.echo(f"  • {check.name}: {check.detail}")
+    if not missing:
+        click.echo(click.style("\nAll required checks passed.", fg="green"))
+    else:
+        click.echo(
+            "\nInstall the missing tools yourself, then re-run "
+            "`reflex-capacitor doctor` / `check`."
+        )
 
 
 def _capacitor_root(app_root: Path, plugin) -> Path:
@@ -138,30 +210,57 @@ def main() -> None:
     """Package a Reflex app as a Capacitor mobile app (remote backend)."""
 
 
-@main.command()
-@click.option("--android", "need_android", is_flag=True, help="Also check Android tooling.")
+@main.command("doctor")
+@click.option("--android", "need_android", is_flag=True, help="Also check Android SDK + JDK.")
 @click.option("--ios", "need_ios", is_flag=True, help="Also check iOS / Xcode tooling.")
-def doctor(need_android: bool, need_ios: bool) -> None:
-    """Check Node / npm / optional native SDKs."""
-    checks = preflight.run_checks(need_android=need_android, need_ios=need_ios)
-    click.echo("reflex-capacitor doctor — mobile build prerequisites\n")
-    for check in checks:
-        mark = click.style("ok", fg="green") if check.ok else click.style("MISSING", fg="red")
-        optional = "" if check.required else click.style(" (optional)", fg="yellow")
-        click.echo(f"  [{mark}] {check.name}{optional}: {check.detail}")
-        if not check.ok and check.remediation:
-            click.echo("\n".join(f"         {line}" for line in check.remediation.splitlines()))
-    click.echo(
-        "\nPhase 1 uses a *remote* Reflex backend — set CapacitorPlugin(backend_url=...) "
-        "to your hosted API (HTTPS + WSS in production)."
+@click.option(
+    "--device",
+    "need_device",
+    is_flag=True,
+    help="Also require adb (for run/dev on a phone/emulator).",
+)
+def doctor(need_android: bool, need_ios: bool, need_device: bool) -> None:
+    """Check host dependencies (Reflex / Node / JDK / SDK). Does not install them."""
+    if need_device and not need_android:
+        need_android = True
+    checks = preflight.run_checks(
+        need_android=need_android,
+        need_ios=need_ios,
+        need_device=need_device,
     )
-    missing = preflight.failed_required(checks)
-    if missing:
-        raise click.ClickException(
-            f"{len(missing)} required check(s) failed — install the above, then re-run."
-        )
-    click.echo(click.style("\nAll required checks passed.", fg="green"))
+    _print_doctor_report(checks)
+    click.echo(
+        "\nTip: set CapacitorPlugin(backend_url=...) to your hosted API "
+        "(HTTPS + WSS in production)."
+    )
+    if preflight.failed_required(checks):
+        n = len(preflight.failed_required(checks))
+        raise click.ClickException(f"{n} required check(s) failed.")
 
+
+@main.command("check")
+@click.option("--android", "need_android", is_flag=True, help="Also check Android SDK + JDK.")
+@click.option("--ios", "need_ios", is_flag=True, help="Also check iOS / Xcode tooling.")
+@click.option(
+    "--device",
+    "need_device",
+    is_flag=True,
+    help="Also require adb (for run/dev on a phone/emulator).",
+)
+@click.pass_context
+def check_cmd(
+    ctx: click.Context,
+    need_android: bool,
+    need_ios: bool,
+    need_device: bool,
+) -> None:
+    """Alias for ``doctor`` — verify host dependencies before packaging."""
+    ctx.invoke(
+        doctor,
+        need_android=need_android,
+        need_ios=need_ios,
+        need_device=need_device,
+    )
 
 @main.command("init")
 @click.option(
@@ -178,8 +277,10 @@ def doctor(need_android: bool, need_ios: bool) -> None:
     default=("android",),
     help="Native platform(s) to add (default: android). Repeatable.",
 )
-def init_cmd(app_dir: str, platforms: tuple[str, ...]) -> None:
+@_proxy_option
+def init_cmd(app_dir: str, platforms: tuple[str, ...], proxy: str | None) -> None:
     """Scaffold the Capacitor project and add native platforms."""
+    _activate_proxy(proxy)
     app_root = Path(app_dir).resolve()
     os.chdir(app_root)
     _preflight(need_android="android" in platforms, need_ios="ios" in platforms)
@@ -231,8 +332,10 @@ def init_cmd(app_dir: str, platforms: tuple[str, ...]) -> None:
     default=(),
     help="Ensure these platforms exist before sync (optional).",
 )
-def sync(app_dir: str, skip_export: bool, platforms: tuple[str, ...]) -> None:
+@_proxy_option
+def sync(app_dir: str, skip_export: bool, platforms: tuple[str, ...], proxy: str | None) -> None:
     """Export the Reflex frontend and ``npx cap sync``."""
+    _activate_proxy(proxy)
     app_root = Path(app_dir).resolve()
     os.chdir(app_root)
     _preflight()
@@ -293,14 +396,26 @@ def sync(app_dir: str, skip_export: bool, platforms: tuple[str, ...]) -> None:
     default=None,
     help="Optional device / emulator id passed to `npx cap run`.",
 )
-def run(platform: str, app_dir: str, skip_sync: bool, target: str | None) -> None:
+@_proxy_option
+def run(
+    platform: str,
+    app_dir: str,
+    skip_sync: bool,
+    target: str | None,
+    proxy: str | None,
+) -> None:
     """Sync (unless skipped) and launch on a device / emulator."""
     if platform == "ios" and sys.platform != "darwin":
         raise click.ClickException("iOS requires macOS + Xcode.")
 
+    _activate_proxy(proxy)
     app_root = Path(app_dir).resolve()
     os.chdir(app_root)
-    _preflight(need_android=platform == "android", need_ios=platform == "ios")
+    _preflight(
+        need_android=platform == "android",
+        need_ios=platform == "ios",
+        need_device=platform == "android",
+    )
     plugin = _ensure_plugin(app_root)
     cap_root = _capacitor_root(app_root, plugin)
 
@@ -312,6 +427,7 @@ def run(platform: str, app_dir: str, skip_sync: bool, target: str | None) -> Non
             app_dir=app_dir,
             skip_export=False,
             platforms=(platform,),
+            proxy=proxy,
         )
     else:
         _ensure_platform(cap_root, platform)
@@ -337,7 +453,11 @@ def _gradle_build(android_root: Path, task: str) -> None:
         raise click.ClickException(f"Gradle wrapper missing at {gradlew}")
     if os.name != "nt":
         gradlew.chmod(gradlew.stat().st_mode | 0o111)
-    _run([str(gradlew), task, "--no-daemon", "--stacktrace"], cwd=android_root)
+    cmd = [str(gradlew), task, "--no-daemon", "--stacktrace"]
+    if _active_proxy:
+        # Command-line -D overrides stale systemProp.* in gradle.properties.
+        cmd[1:1] = gradle_jvm_proxy_args(_active_proxy)
+    _run(cmd, cwd=android_root)
 
 
 def _resolve_android_signing(
@@ -410,6 +530,7 @@ def _resolve_android_signing(
     envvar="REFLEX_CAPACITOR_KEY_PASSWORD",
     help="Key password.",
 )
+@_proxy_option
 def build(
     platform: str,
     app_dir: str,
@@ -420,11 +541,13 @@ def build(
     keystore_password: str | None,
     key_alias: str | None,
     key_password: str | None,
+    proxy: str | None,
 ) -> None:
     """Build a release/debug APK/AAB (Android) or archive (iOS, macOS only)."""
     if platform == "ios" and sys.platform != "darwin":
         raise click.ClickException("iOS build requires macOS + Xcode.")
 
+    _activate_proxy(proxy)
     app_root = Path(app_dir).resolve()
     os.chdir(app_root)
     _preflight(need_android=platform == "android", need_ios=platform == "ios")
@@ -438,6 +561,7 @@ def build(
             app_dir=app_dir,
             skip_export=False,
             platforms=(platform,),
+            proxy=proxy,
         )
     else:
         _ensure_platform(cap_root, platform)
@@ -538,6 +662,7 @@ def _backend_health_url(backend_port: int) -> str:
     default=None,
     help="Optional device / emulator id passed to `npx cap run`.",
 )
+@_proxy_option
 def dev(
     platform: str,
     app_dir: str,
@@ -547,6 +672,7 @@ def dev(
     live_reload: bool,
     skip_export: bool,
     target: str | None,
+    proxy: str | None,
 ) -> None:
     """Develop on a device: export, sync, start Reflex dev server, launch the app.
 
@@ -560,9 +686,14 @@ def dev(
     if platform == "ios" and sys.platform != "darwin":
         raise click.ClickException("iOS dev requires macOS + Xcode.")
 
+    _activate_proxy(proxy)
     app_root = Path(app_dir).resolve()
     os.chdir(app_root)
-    _preflight(need_android=platform == "android", need_ios=platform == "ios")
+    _preflight(
+        need_android=platform == "android",
+        need_ios=platform == "ios",
+        need_device=platform == "android",
+    )
     plugin = _ensure_plugin(app_root)
     cap_root = _capacitor_root(app_root, plugin)
 

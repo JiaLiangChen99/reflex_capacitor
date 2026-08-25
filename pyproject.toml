@@ -19,6 +19,10 @@ dev = [
 [project.scripts]
 reflex-capacitor = "reflex_capacitor.cli:main"
 
+[project.urls]
+Documentation = "docs/README.md"
+Changelog = "CHANGELOG.md"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
@@ -32,8 +36,22 @@ packages = ["src/reflex_capacitor"]
 [tool.hatch.build.targets.sdist]
 only-include = [
     "src/reflex_capacitor",
-    "docs",
+    "docs/README.md",
+    "docs/guide/00-getting-started.md",
+    "docs/guide/install.md",
+    "docs/guide/faq.md",
+    "docs/guide/cli.md",
+    "docs/guide/configuration.md",
+    "docs/guide/android-build.md",
+    "docs/guide/02-native-bridge.md",
+    "docs/guide/dev-reload.md",
+    "docs/guide/debug.md",
+    "docs/guide/publishing.md",
+    "docs/guide/ci.md",
     "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "pyproject.toml",
 ]
 
 [tool.ruff]
@@ -42,3 +60,11 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: offline L1 integration tests (temp scaffold, no adb/npm network)",
+    "device: requires adb-connected Android device or emulator (future smoke tests)",
+]
+testpaths = ["tests"]
+pythonpath = ["tests"]

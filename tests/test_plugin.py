@@ -58,6 +58,26 @@ def test_all_plugin_ids_include_core_and_extended():
     assert "camera" in ALL_PLUGIN_IDS
 
 
+def test_phase5_plugin_ids_separate_from_all():
+    from reflex_capacitor.bridge.plugins import ALL_PLUGIN_IDS, PHASE5_PLUGIN_IDS
+
+    assert "push-notifications" in PHASE5_PLUGIN_IDS
+    assert "push-notifications" not in ALL_PLUGIN_IDS
+
+
+def test_apply_package_json_includes_phase5_plugins(tmp_path: Path):
+    from reflex_capacitor.bridge.plugins import ALL_PLUGIN_IDS, PHASE5_PLUGIN_IDS, apply_package_json_deps
+
+    pkg_path = tmp_path / "package.json"
+    apply_package_json_deps(
+        pkg_path,
+        ALL_PLUGIN_IDS + PHASE5_PLUGIN_IDS,
+        capacitor_version="^7.0.0",
+    )
+    pkg = json.loads(pkg_path.read_text(encoding="utf-8"))
+    assert "@capacitor/push-notifications" in pkg["dependencies"]
+
+
 def test_apply_dev_server_sets_url(tmp_path: Path):
     conf_path = tmp_path / "capacitor.config.json"
     conf_path.write_text("{}", encoding="utf-8")

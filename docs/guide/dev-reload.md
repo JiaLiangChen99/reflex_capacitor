@@ -1,8 +1,8 @@
 # 真机开发 / 热重载
 
-> Phase 3 · `reflex-capacitor dev`
+> 最后更新：2026-08-25 · 命令选项见 [cli.md](cli.md) · 总索引 [README.md](../README.md)
 
-在 Capacitor 壳内开发 Reflex 应用，有两种模式。
+`reflex-capacitor dev`：在 Capacitor 壳内开发，有两种模式。
 
 ## 前置条件
 
@@ -51,7 +51,7 @@ reflex-capacitor dev android --skip-export
 - **`dev` 结束**：若用过 `--live-reload`，CLI 会清除 `capacitor.config.json` 里的 `server.url`；发布前请再执行一次 `reflex-capacitor sync`
 - **生产**：HTTPS + WSS，`androidScheme: https`（插件在 `backend_url` 为 https 时自动设置）
 
-## 反向原生事件（Phase 3.3）
+## 反向原生事件
 
 App 启动时调用一次：
 
@@ -67,7 +67,11 @@ mobile.setup_native_listeners(back_button="emit")
 | `pause` / `resume` | App 生命周期 |
 | `backButton` | Android 返回键 |
 | `keyboardWillShow` / `keyboardWillHide` | 软键盘 |
-| `appUrlOpen` | 深链打开（预留） |
+| `appUrlOpen` | 深链 — 见 [deep-linking.md](deep-linking.md) |
+| `pushRegistration` | 推送 token — 见 [push-notifications.md](push-notifications.md) |
+| `pushRegistrationError` | 推送注册失败 |
+| `pushNotificationReceived` | 前台收到推送 |
+| `pushNotificationActionPerformed` | 用户点击通知 |
 
 `back_button` 模式：
 
@@ -85,7 +89,7 @@ Demo 在「原生」Tab 提供 **刷新原生事件** 按钮。
 reflex-capacitor dev ios
 ```
 
-本仓库 CI 暂只打 Android APK；iOS 见 [04-roadmap.md](04-roadmap.md) 3.4。
+本仓库 CI 暂只打 Android APK；iOS 真机 / CI 见 [plan.md](../design/plan.md)。
 
 ## 常见问题
 
@@ -104,3 +108,7 @@ reflex-capacitor dev ios
 
 - 前端 dev server 可能只监听 `127.0.0.1`；可先用默认模式（bundled www）
 - 或查 Vite 是否允许 LAN 访问（依 Reflex 版本而定）
+
+## 相关
+
+- [cli.md](cli.md) · [configuration.md](configuration.md) · [debug.md](debug.md) · [android-build.md](android-build.md) · [README.md](../README.md)

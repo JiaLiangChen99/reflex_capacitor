@@ -1,46 +1,43 @@
-# reflex-capacitor 设计文档
+# reflex-capacitor 文档
 
-将 Reflex Web 应用包装为 **Capacitor 移动 App**（iOS / Android）的设计与开发要点。
+**remote** 模式：Reflex 静态前端进 Capacitor 壳，连远端 Python 后端。
 
-> **范围**：仅 **remote** 模式（静态前端进壳，Python 后端跑在服务器）。  
-> **当前进度**：Phase 1–4 核心已完成（2026-08-24），详见 [04-roadmap.md](04-roadmap.md)。
+| 目录 | 读者 | 说明 |
+|------|------|------|
+| **[guide/](guide/)** | 使用者 | 安装、配置、CLI、打包、API、调试 |
+| **[design/](design/)** | 维护者 | 架构、打包原理、规划、测试（**不进 PyPI 包**） |
 
-## 从这里开始
+👉 首读：[guide/00-getting-started.md](guide/00-getting-started.md) · [guide/faq.md](guide/faq.md)
 
-👉 **[00-getting-started.md](00-getting-started.md)** — 安装、配置、CI 打 APK、dev、build、文档索引（**推荐首读**）
+---
 
-## 文档索引
+## guide/ — 用户文档（推荐）
 
-| 文档 | 内容 |
+| 文档 | 用途 |
 |------|------|
-| [00-getting-started.md](00-getting-started.md) | **快速上手**（Phase 1–4 总览） |
-| [04-roadmap.md](04-roadmap.md) | 各 Phase 完成情况与待办 |
-| [01-architecture.md](01-architecture.md) | 架构、模块、数据流 |
-| [02-native-bridge.md](02-native-bridge.md) | `mobile.*` API 与 bridge 设计 |
-| [03-development-plan.md](03-development-plan.md) | 开发决策与踩坑 |
-| [ci.md](ci.md) | GitHub Actions：debug APK / release AAB |
-| [dev-reload.md](dev-reload.md) | `reflex-capacitor dev` 真机开发 |
-| [publishing.md](publishing.md) | Release 签名、Play 上架、iOS 概要 |
-| [debug.md](debug.md) | 真机调试、日志、WebSocket 问题 |
-| [permissions.md](permissions.md) | 各插件 Android/iOS 权限 |
-| [image-editor.md](image-editor.md) | 内置图片编辑器（本机裁剪/压缩） |
+| [00-getting-started.md](guide/00-getting-started.md) | 快速上手 |
+| [install.md](guide/install.md) | pip / 依赖 / PyPI / 推送 GitHub 前检查 |
+| [faq.md](guide/faq.md) | 常见问题 |
+| [cli.md](guide/cli.md) | 命令行 |
+| [configuration.md](guide/configuration.md) | `CapacitorPlugin`、CORS、平台 |
+| [android-build.md](guide/android-build.md) | 本机打 APK |
+| [02-native-bridge.md](guide/02-native-bridge.md) | `mobile.*` API |
+| [dev-reload.md](guide/dev-reload.md) | 真机开发 |
+| [debug.md](guide/debug.md) | 排障 |
+| [publishing.md](guide/publishing.md) | 签名与上架 |
+| [ci.md](guide/ci.md) | GitHub Actions 打 APK |
 
-根目录 [README.md](../README.md) · [CHANGELOG.md](../CHANGELOG.md)
+**按需阅读**（可选能力）：[permissions.md](guide/permissions.md) · [deep-linking.md](guide/deep-linking.md) · [push-notifications.md](guide/push-notifications.md)
 
-## 一句话目标
+---
 
-```text
-同一套 Reflex 页面 / State / 事件
-  → reflex export 静态前端
-  → Capacitor WebView 加载
-  → 连远程 Reflex 后端
-  → mobile.* 调原生能力（通知、相机、定位…）
-```
+## design/ — 架构与规划（仓库内）
 
-## 平台支持
+| 文档 | 用途 |
+|------|------|
+| [01-architecture.md](design/01-architecture.md) | 三层架构 |
+| [packaging.md](design/packaging.md) | export → sync 数据流 |
+| [plan.md](design/plan.md) | ADR + 路线图 |
+| [testing.md](design/testing.md) | L1/L3 测试 |
 
-| | Android（Windows 可开发） | iOS（需 Mac） |
-|--|---------------------------|---------------|
-| 本地 CLI | ✅ | ❌ |
-| CI 打 debug 包 | ✅ | 未配置 |
-| 生产 release | ✅ AAB/APK | 需本机 Xcode |
+[CHANGELOG.md](../CHANGELOG.md) · [README.md](../README.md)

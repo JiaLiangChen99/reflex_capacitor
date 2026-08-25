@@ -12,7 +12,44 @@
   const logs = [];
   const nativeEvents = [];
   let listenersReady = false;
+  let pushListenersReady = false;
   let backButtonMode = "emit";
+
+  function capPlatform() {
+    return Cap && Cap.getPlatform ? Cap.getPlatform() : "web";
+  }
+
+  function capIsNative() {
+    return !!(Cap && Cap.isNativePlatform && Cap.isNativePlatform());
+  }
+
+  function capIsAndroid() {
+    return capPlatform() === "android";
+  }
+
+  function capIsIos() {
+    return capPlatform() === "ios";
+  }
+
+  function capIsWeb() {
+    return capPlatform() === "web";
+  }
+
+  function capPlatformInfo() {
+    const p = capPlatform();
+    return {
+      platform: p,
+      isNative: capIsNative(),
+      isAndroid: p === "android",
+      isIos: p === "ios",
+      isWeb: p === "web",
+    };
+  }
+
+  /** Prefer uri/webPath over huge dataUrl in native WebViews (Android + iOS). */
+  function preferCameraUriResult(saveGallery) {
+    return capIsNative() || !!saveGallery;
+  }
 
   function plugin(name) {
     if (Plugins[name]) return Plugins[name];
@@ -116,6 +153,50 @@
     addLog("info", "nativeEvent", entry);
   }
 
+  function setupPushListeners() {
+    if (pushListenersReady) {
+      return { ok: true, already: true };
+    }
+    const PN = plugin("PushNotifications");
+    if (!PN) {
+      return { ok: false, error: "plugin_missing" };
+    }
+    PN.addListener("registration", function (token) {
+      pushNativeEvent("pushRegistration", {
+        value: token && token.value ? token.value : "",
+      });
+    });
+    PN.addListener("registrationError", function (err) {
+      pushNativeEvent("pushRegistrationError", {
+        error: err && err.error ? String(err.error) : String(err),
+      });
+    });
+    PN.addListener("pushNotificationReceived", function (notification) {
+      const n = notification || {};
+      pushNativeEvent("pushNotificationReceived", {
+        id: n.id != null ? n.id : "",
+        title: n.title || "",
+        body: n.body || "",
+        data: n.data || {},
+      });
+    });
+    PN.addListener("pushNotificationActionPerformed", function (action) {
+      const a = action || {};
+      const n = a.notification || {};
+      pushNativeEvent("pushNotificationActionPerformed", {
+        actionId: a.actionId || "",
+        notification: {
+          id: n.id != null ? n.id : "",
+          title: n.title || "",
+          body: n.body || "",
+          data: n.data || {},
+        },
+      });
+    });
+    pushListenersReady = true;
+    return { ok: true };
+  }
+
   async function setupNativeListeners({ backButton }) {
     if (listenersReady) {
       return { ok: true, already: true, backButton: backButtonMode };
@@ -126,16 +207,18 @@
       AppPlugin.addListener("appStateChange", function (state) {
         pushNativeEvent("appStateChange", { isActive: state.isActive });
       });
-      AppPlugin.addListener("backButton", function () {
-        pushNativeEvent("backButton", {});
-        if (backButtonMode === "exit") {
-          AppPlugin.exitApp();
-          return;
-        }
-        if (backButtonMode === "history" && window.history && window.history.length > 1) {
-          window.history.back();
-        }
-      });
+      if (capIsAndroid()) {
+        AppPlugin.addListener("backButton", function () {
+          pushNativeEvent("backButton", {});
+          if (backButtonMode === "exit") {
+            AppPlugin.exitApp();
+            return;
+          }
+          if (backButtonMode === "history" && window.history && window.history.length > 1) {
+            window.history.back();
+          }
+        });
+      }
       AppPlugin.addListener("appUrlOpen", function (data) {
         pushNativeEvent("appUrlOpen", { url: data && data.url ? data.url : "" });
       });
@@ -158,7 +241,8 @@
       });
     }
     listenersReady = true;
-    return { ok: true, backButton: backButtonMode };
+    setupPushListeners();
+    return { ok: true, backButton: backButtonMode, platform: capPlatform() };
   }
 
   function drainNativeEvents() {
@@ -169,11 +253,27 @@
 
   const core = {
     isNative() {
-      return !!(Cap && Cap.isNativePlatform && Cap.isNativePlatform());
+      return capIsNative();
     },
 
     platform() {
-      return Cap && Cap.getPlatform ? Cap.getPlatform() : "web";
+      return capPlatform();
+    },
+
+    platformInfo() {
+      return capPlatformInfo();
+    },
+
+    isAndroid() {
+      return capIsAndroid();
+    },
+
+    isIos() {
+      return capIsIos();
+    },
+
+    isWeb() {
+      return capIsWeb();
     },
 
     async notify({ title, body }) {
@@ -356,8 +456,7 @@
       const permResult = await ensureCameraPermission(Cam, saveGallery);
       if (!permResult.ok) return permResult;
       const q = Math.max(1, Math.min(Number(quality) || 90, 100));
-      // Uri/webPath is more reliable on Android than loading a huge dataUrl in WebView.
-      const useUri = core.platform() === "android" || saveGallery;
+      const useUri = preferCameraUriResult(saveGallery);
       try {
         const photo = await Cam.getPhoto({
           quality: q,
@@ -527,6 +626,44 @@
       return { ok: true, result: result };
     },
 
+    async pushRegister() {
+      const PN = plugin("PushNotifications");
+      if (!PN) {
+        return { ok: false, error: "plugin_missing" };
+      }
+      setupPushListeners();
+      let perm = await PN.checkPermissions();
+      if (perm.receive !== "granted") {
+        perm = await PN.requestPermissions();
+        if (perm.receive !== "granted") {
+          return { ok: false, error: "permission_denied", permission: perm };
+        }
+      }
+      await PN.register();
+      return { ok: true };
+    },
+
+    async pushCheckPermissions() {
+      const PN = plugin("PushNotifications");
+      if (!PN) {
+        return { ok: false, error: "plugin_missing" };
+      }
+      const perm = await PN.checkPermissions();
+      return { ok: true, permission: perm };
+    },
+
+    async pushRequestPermissions() {
+      const PN = plugin("PushNotifications");
+      if (!PN) {
+        return { ok: false, error: "plugin_missing" };
+      }
+      const perm = await PN.requestPermissions();
+      return {
+        ok: perm.receive === "granted",
+        permission: perm,
+      };
+    },
+
     async editImage({ dataUrl, webPath, editor }) {
       const ed = window.__REFLEX_CAPACITOR_IMAGE_EDITOR__;
       if (!ed) return { ok: false, error: "image_editor_not_loaded" };
@@ -558,7 +695,7 @@
         try {
           const raw = await Cam.getPhoto({
             quality: q,
-            resultType: core.platform() === "android" ? "uri" : "dataUrl",
+            resultType: preferCameraUriResult(false) ? "uri" : "dataUrl",
             source: "PROMPT",
           });
           photo = { ok: true, dataUrl: raw.dataUrl, webPath: raw.webPath, format: raw.format };
@@ -610,6 +747,7 @@
         "Keyboard",
         "Browser",
         "Filesystem",
+        "PushNotifications",
       ];
       const loaded = expected.filter(function (name) {
         return !!Plugins[name];
@@ -620,13 +758,17 @@
       return {
         bridgeLoaded: true,
         bridgeVersion: 2,
-        isNative: core.isNative(),
-        platform: core.platform(),
+        isNative: capIsNative(),
+        platform: capPlatform(),
+        isAndroid: capIsAndroid(),
+        isIos: capIsIos(),
+        isWeb: capIsWeb(),
         capacitorCore: !!(Cap && Cap.isNativePlatform),
         pluginsLoaded: loaded,
         pluginsMissing: missing,
         logCount: logs.length,
         nativeListenerReady: listenersReady,
+        pushListenerReady: pushListenersReady,
         nativeEventBuffer: nativeEvents.length,
         location: typeof window !== "undefined" && window.location ? window.location.href : "",
         userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "",
@@ -640,9 +782,23 @@
   };
 
   Object.keys(core).forEach(function (key) {
-    if (key === "isNative" || key === "platform") return;
+    if (
+      key === "isNative" ||
+      key === "platform" ||
+      key === "platformInfo" ||
+      key === "isAndroid" ||
+      key === "isIos" ||
+      key === "isWeb"
+    ) {
+      return;
+    }
     bridge[key] = wrap(key, core[key]);
   });
+
+  bridge.platformInfo = core.platformInfo;
+  bridge.isAndroid = core.isAndroid;
+  bridge.isIos = core.isIos;
+  bridge.isWeb = core.isWeb;
 
   window.__REFLEX_CAPACITOR__ = bridge;
   addLog("info", "init", bridge.getDiagnostics());
