@@ -2,7 +2,13 @@
 
 All notable changes to this project are documented here.
 
-## [Unreleased] — Phase 5
+## [0.3.0] — 2026-08-25
+
+Phase 5 features for PyPI, plus a Python 3.12 compatibility fix for Android manifest permission patching.
+
+### Fixes
+
+- Android `uses-permission` insert: use positional `str.replace(..., 1)` (Python 3.12 rejects `count=` keyword)
 
 ### Deep linking
 
