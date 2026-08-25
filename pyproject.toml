@@ -1,6 +1,6 @@
 [project]
 name = "reflex-capacitor"
-version = "0.3.1"
+version = "0.3.2"
 description = "Package a Reflex app as a Capacitor mobile app (remote backend)."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -20,8 +20,11 @@ dev = [
 reflex-capacitor = "reflex_capacitor.cli:main"
 
 [project.urls]
-Documentation = "docs/README.md"
-Changelog = "CHANGELOG.md"
+Homepage = "https://github.com/JiaLiangChen99/reflex_capacitor"
+Documentation = "https://github.com/JiaLiangChen99/reflex_capacitor/blob/main/docs/README.md"
+Changelog = "https://github.com/JiaLiangChen99/reflex_capacitor/blob/main/CHANGELOG.md"
+Repository = "https://github.com/JiaLiangChen99/reflex_capacitor"
+Issues = "https://github.com/JiaLiangChen99/reflex_capacitor/issues"
 
 [build-system]
 requires = ["hatchling"]

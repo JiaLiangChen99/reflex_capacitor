@@ -112,16 +112,16 @@ reflex-capacitor sync
 
 #### 每次发版
 
-1. 改 `pyproject.toml` 里 `version`（当前 `0.3.1`）  
+1. 改 `pyproject.toml` 里 `version`（当前 `0.3.2`）  
 2. 更新 `CHANGELOG.md`，提交并 push  
 3. GitHub → **Releases** → **Draft a new release**  
-   - Tag：`v0.3.1`（**必须**与 `pyproject.toml` 的 version 一致，带 `v` 前缀）  
+   - Tag：`v0.3.2`（**必须**与 `pyproject.toml` 的 version 一致，带 `v` 前缀）  
    - Title / 说明：粘贴 CHANGELOG 摘要  
    - 点 **Publish release**  
 4. Actions 里看 **Publish to PyPI** workflow；成功后：
 
 ```bash
-pip install reflex-capacitor==0.3.1
+pip install reflex-capacitor==0.3.2
 ```
 
 Workflow 会：跑 L1 集成测试 → `python -m build` → 校验 wheel 含 `bridge.js` / scaffold → 校验 tag 与 version → `pypi-publish`。

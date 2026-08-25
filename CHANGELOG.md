@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here.
 
+## [0.3.2] — 2026-08-25
+
+### Fixes
+
+- `project.urls` must be absolute HTTPS links for PyPI (relative `docs/README.md` caused upload 400)
+
 ## [0.3.1] — 2026-08-25
 
 ### Fixes

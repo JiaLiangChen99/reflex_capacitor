@@ -8,9 +8,9 @@
 #      Settings → Secrets and variables → Actions → New repository secret
 #
 # Release flow:
-#   1. Bump version in pyproject.toml (must match the git tag, e.g. 0.3.1 ↔ v0.3.1)
+#   1. Bump version in pyproject.toml (must match the git tag, e.g. 0.3.2 ↔ v0.3.2)
 #   2. Update CHANGELOG.md, commit, push
-#   3. GitHub → Releases → Draft new release → tag v0.3.1 → Publish release
+#   3. GitHub → Releases → Draft new release → tag v0.3.2 → Publish release
 #   4. This workflow builds sdist+wheel and uploads to PyPI
 
 name: Publish to PyPI
