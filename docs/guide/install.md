@@ -84,7 +84,7 @@ reflex-capacitor sync
 - [ ] `pytest tests/ -q`（含 `-m integration`）通过
 - [ ] `reflex-capacitor check` 在干净说明与文档一致
 - [ ] README 示例可复制（默认不含 `PHASE5` 推送）
-- [ ] sdist/wheel 含 `bridge/assets`（hatch `force-include`）
+- [ ] sdist/wheel 含 `bridge/assets`（随 `packages` 一并打入）
 - [ ] 未把本机 IP、keystore、密码写进仓库
 
 ### 4.2 GitHub Actions 自动发布（推荐）
@@ -112,16 +112,16 @@ reflex-capacitor sync
 
 #### 每次发版
 
-1. 改 `pyproject.toml` 里 `version`（当前 `0.3.0`）  
+1. 改 `pyproject.toml` 里 `version`（当前 `0.3.1`）  
 2. 更新 `CHANGELOG.md`，提交并 push  
 3. GitHub → **Releases** → **Draft a new release**  
-   - Tag：`v0.3.0`（**必须**与 `pyproject.toml` 的 version 一致，带 `v` 前缀）  
+   - Tag：`v0.3.1`（**必须**与 `pyproject.toml` 的 version 一致，带 `v` 前缀）  
    - Title / 说明：粘贴 CHANGELOG 摘要  
    - 点 **Publish release**  
 4. Actions 里看 **Publish to PyPI** workflow；成功后：
 
 ```bash
-pip install reflex-capacitor==0.3.0
+pip install reflex-capacitor==0.3.1
 ```
 
 Workflow 会：跑 L1 集成测试 → `python -m build` → 校验 wheel 含 `bridge.js` / scaffold → 校验 tag 与 version → `pypi-publish`。

@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here.
 
+## [0.3.1] — 2026-08-25
+
+### Fixes
+
+- Hatch wheel: drop redundant `force-include` for `bridge/assets` (already packaged via `packages`), which caused duplicate `bridge.js` and failed `python -m build`
+
 ## [0.3.0] — 2026-08-25
 
 Phase 5 features for PyPI, plus a Python 3.12 compatibility fix for Android manifest permission patching.
