@@ -256,4 +256,4 @@ def _ensure_android_permission(manifest_path: Path | str, permission: str) -> No
             return
 
     if "</manifest>" in text:
-        path.write_text(text.replace("</manifest>", permission_line + "</manifest>", count=1), encoding="utf-8")
+        path.write_text(text.replace("</manifest>", permission_line + "</manifest>", 1), encoding="utf-8")
