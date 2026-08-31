@@ -13,6 +13,7 @@ All notable changes to this project are documented here.
 - Android mic: also declare ``MODIFY_AUDIO_SETTINGS`` (required by WebView ``getUserMedia``; missing it causes ``permission_denied`` even when RECORD_AUDIO is granted)
 - System TTS: ``mobile.speak`` / ``stop_speak`` prefer native ``@capacitor-community/text-to-speech`` (Cap 7 → npm ``^6.1.0``), fall back to ``speechSynthesis``
 - TTS audio focus (Android): ``finalize_bridge`` installs local ``AudioFocusPlugin``; ``mobile.speak`` defaults to ``audio_focus="pause"`` so background music typically pauses (``duck`` / ``none`` also supported)
+- AudioFocus: use ``USAGE_MEDIA`` + ``AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE`` (QQ Music often ignored ``USAGE_ASSISTANT``); speak callback reports ``audioFocus.granted``
 
 ### Fixes
 

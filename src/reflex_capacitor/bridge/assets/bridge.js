@@ -86,16 +86,30 @@
   async function withAudioFocus(mode, fn) {
     const focus = audioFocusPlugin();
     let requested = false;
-    if (focus && typeof focus.request === "function" && mode !== "none") {
+    let focusMeta = {
+      mode: mode || "pause",
+      plugin: !!(focus && typeof focus.request === "function"),
+      granted: false,
+      result: null,
+      error: null,
+    };
+    if (focusMeta.plugin && mode !== "none") {
       try {
         const res = await focus.request({ mode: mode || "pause" });
-        requested = !!(res && res.granted);
-      } catch (_err) {
+        focusMeta.granted = !!(res && res.granted);
+        focusMeta.result = res && typeof res.result === "number" ? res.result : null;
+        requested = focusMeta.granted;
+      } catch (err) {
+        focusMeta.error = String(err && err.message ? err.message : err);
         requested = false;
       }
     }
     try {
-      return await fn();
+      const out = await fn();
+      if (out && typeof out === "object") {
+        out.audioFocus = focusMeta;
+      }
+      return out;
     } finally {
       if (requested && focus && typeof focus.abandon === "function") {
         try {
@@ -908,7 +922,6 @@
               engine: "TextToSpeech",
               lang: opts.lang,
               textLength: utteranceText.length,
-              audioFocus: focusMode,
             };
           } catch (err) {
             return {
@@ -983,7 +996,6 @@
             engine: "speechSynthesis",
             lang: utter.lang,
             textLength: utteranceText.length,
-            audioFocus: focusMode,
           };
         } catch (err) {
           return { ok: false, error: String(err && err.message ? err.message : err) };

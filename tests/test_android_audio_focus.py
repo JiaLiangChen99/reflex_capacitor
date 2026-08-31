@@ -57,6 +57,8 @@ def test_install_writes_plugin_and_registers_java(tmp_path: Path) -> None:
     src = plugin.read_text(encoding="utf-8")
     assert 'name = "AudioFocus"' in src
     assert "requestAudioFocus" in src
+    assert "USAGE_MEDIA" in src
+    assert "AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE" in src
 
     main = find_main_activity(android)
     assert main is not None
