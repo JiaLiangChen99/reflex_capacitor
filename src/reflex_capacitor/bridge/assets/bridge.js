@@ -831,6 +831,85 @@
       };
     },
 
+    async speak({ text, lang, rate, pitch, volume }) {
+      const utteranceText = text == null ? "" : String(text);
+      if (!utteranceText) {
+        return { ok: false, error: "empty_text" };
+      }
+      if (typeof window === "undefined" || !window.speechSynthesis || typeof SpeechSynthesisUtterance === "undefined") {
+        return {
+          ok: false,
+          error: "tts_unavailable",
+          hint: "WebView has no speechSynthesis; install a native TTS plugin if needed.",
+        };
+      }
+      const synth = window.speechSynthesis;
+      const waitForVoices = function () {
+        return new Promise(function (resolve) {
+          const existing = synth.getVoices();
+          if (existing && existing.length) {
+            resolve(existing);
+            return;
+          }
+          let done = false;
+          const finish = function () {
+            if (done) return;
+            done = true;
+            synth.removeEventListener("voiceschanged", onVoices);
+            resolve(synth.getVoices() || []);
+          };
+          const onVoices = function () {
+            finish();
+          };
+          synth.addEventListener("voiceschanged", onVoices);
+          setTimeout(finish, 500);
+        });
+      };
+      try {
+        synth.cancel();
+        await waitForVoices();
+        const utter = new SpeechSynthesisUtterance(utteranceText);
+        utter.lang = lang || "zh-CN";
+        utter.rate = Math.max(0.1, Math.min(Number(rate) || 1, 10));
+        utter.pitch = Math.max(0, Math.min(Number(pitch) || 1, 2));
+        utter.volume = Math.max(0, Math.min(Number(volume) || 1, 1));
+        await new Promise(function (resolve, reject) {
+          let settled = false;
+          const done = function () {
+            if (settled) return;
+            settled = true;
+            resolve();
+          };
+          utter.onend = done;
+          utter.onerror = function (event) {
+            if (settled) return;
+            settled = true;
+            const err = (event && event.error) || "speak_failed";
+            reject(new Error(String(err)));
+          };
+          synth.speak(utter);
+          // Some WebViews never fire onend — keep a long safety timeout.
+          setTimeout(done, Math.max(8000, utteranceText.length * 250));
+        });
+        return {
+          ok: true,
+          speaking: false,
+          engine: "speechSynthesis",
+          lang: utter.lang,
+          textLength: utteranceText.length,
+        };
+      } catch (err) {
+        return { ok: false, error: String(err && err.message ? err.message : err) };
+      }
+    },
+
+    async stopSpeak() {
+      if (typeof window !== "undefined" && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+      return { ok: true, speaking: false };
+    },
+
     async invoke({ plugin: pluginName, method, args }) {
       const P = Plugins[pluginName];
       if (!P || typeof P[method] !== "function") {

@@ -286,6 +286,39 @@ def recording_status(callback: Any) -> rx.event.EventSpec:
     return call_bridge("recordingStatus", callback=callback)
 
 
+def speak(
+    text: str,
+    *,
+    lang: str = "zh-CN",
+    rate: float = 1.0,
+    pitch: float = 1.0,
+    volume: float = 1.0,
+    callback: Any = None,
+) -> rx.event.EventSpec:
+    """Speak ``text`` with on-device system TTS (Web Speech API in the WebView).
+
+    Cloud LLM replies should return text only; call this to announce locally.
+    No audio is uploaded. Works in browser and Capacitor when the WebView
+    exposes ``speechSynthesis`` (uses the OS TTS engine).
+    """
+    return call_bridge(
+        "speak",
+        {
+            "text": text,
+            "lang": lang,
+            "rate": rate,
+            "pitch": pitch,
+            "volume": volume,
+        },
+        callback=callback,
+    )
+
+
+def stop_speak(*, callback: Any = None) -> rx.event.EventSpec:
+    """Stop any in-progress :func:`speak` utterance."""
+    return call_bridge("stopSpeak", callback=callback)
+
+
 def invoke(
     plugin: str,
     method: str,

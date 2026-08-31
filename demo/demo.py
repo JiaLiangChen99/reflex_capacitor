@@ -247,6 +247,21 @@ class State(rx.State):
         return mobile.recording_status(State.on_bridge_result)
 
     @rx.event
+    def run_speak_demo(self):
+        self._append_server_log(log_bridge("speak", source="server"))
+        self.bridge_msg = "正在系统播报…"
+        return mobile.speak(
+            "你好，这是 python的reflex capacitor框架的系统语音播报示例。",
+            lang="zh-CN",
+            callback=State.on_bridge_result,
+        )
+
+    @rx.event
+    def run_stop_speak(self):
+        self._append_server_log(log_bridge("stopSpeak", source="server"))
+        return mobile.stop_speak(callback=State.on_bridge_result)
+
+    @rx.event
     def refresh_native_events(self):
         return mobile.poll_native_events(State.on_native_events)
 
@@ -583,6 +598,10 @@ def _native_panel() -> rx.Component:
         _native_btn("播放刚录的音频", "play", State.run_play_recording),
         _native_btn("停止播放", "square", State.run_stop_playback),
         _native_btn("录音状态", "activity", State.run_recording_status),
+        rx.separator(size="4", color_scheme="gray"),
+        rx.text("系统播报 (TTS)", size="2", weight="bold", color=_ACCENT),
+        _native_btn("播报固定话", "volume-2", State.run_speak_demo),
+        _native_btn("停止播报", "volume-x", State.run_stop_speak),
         rx.separator(size="4", color_scheme="gray"),
         rx.text("Phase 5 · 深链 / 推送", size="2", weight="bold", color=_ACCENT),
         _native_btn("注册远程推送", "radio", State.run_push_register),

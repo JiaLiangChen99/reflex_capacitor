@@ -9,6 +9,7 @@ All notable changes to this project are documented here.
 - Built-in voice recording / playback in packaged ``bridge.js`` (``mobile.start_recording`` / ``stop_recording`` / ``play_recording``); enable ``voice-recorder`` for mic permissions
 - ``CapacitorPlugin`` loads bridge scripts during ``reflex run`` (browser) via Vite ``public/`` + document inject
 - Android mic: also declare ``MODIFY_AUDIO_SETTINGS`` (required by WebView ``getUserMedia``; missing it causes ``permission_denied`` even when RECORD_AUDIO is granted)
+- System TTS: ``mobile.speak`` / ``stop_speak`` via WebView ``speechSynthesis`` (on-device; demo button on Native tab)
 
 ### Fixes
 

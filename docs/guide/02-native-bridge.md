@@ -113,6 +113,7 @@ window.__REFLEX_CAPACITOR__ = {
 | 条码扫描 | community | `scan_barcode(callback)` | 未做 |
 | 应用内浏览器 | `@capacitor/browser` | `browser_open(url)` | P1（EXTENDED） |
 | 录音 / 回放 | 内置 `bridge.js`（MediaRecorder） | `start_recording` / `stop_recording` / `play_recording` | P1（EXTENDED，builtin） |
+| 系统播报 TTS | 内置 `bridge.js`（`speechSynthesis`） | `speak` / `stop_speak` | 随 bridge 提供；走系统 TTS，适合播报 LLM 文本 |
 
 > **「组件」**：Capacitor 官方几乎都是 **命令式 Plugin API**，不是 React Native 那种 `<Camera />` 组件。Google Maps 等少数带 Web Component；MVP **不包地图组件**，需要时再单独立项。
 
