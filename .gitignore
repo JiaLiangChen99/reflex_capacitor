@@ -2,7 +2,8 @@
 .states
 .web
 *.db
-assets/external/
+media_cache/
+uploaded_files/
 
 # Python-generated files
 __pycache__/

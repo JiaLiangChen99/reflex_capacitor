@@ -6,8 +6,17 @@ import json
 import logging
 
 import reflex as rx
+from reflex.constants import Endpoint
 from reflex_capacitor import mobile
 from reflex_capacitor.bridge import log_bridge
+
+from demo.cloud_media import (
+    AUDIO_NAME,
+    VIDEO_NAME,
+    demo_media_ready,
+    ensure_demo_media,
+    seed_demo_media_lifespan,
+)
 
 logging.getLogger("reflex_capacitor.bridge").setLevel(logging.DEBUG)
 
@@ -19,6 +28,11 @@ _INK = "#e8eef4"
 _MUTED = "#8b9aab"
 _ACCENT = "#3d9a8b"
 _ACCENT_DIM = "#2d7368"
+
+
+def _upload_file_url(name: str) -> str:
+    """Absolute backend URL for ``/_upload/<name>`` (Capacitor needs a full URL)."""
+    return f"{Endpoint.UPLOAD.get_url().rstrip('/')}/{name}"
 
 
 class State(rx.State):
@@ -33,21 +47,64 @@ class State(rx.State):
     last_deep_link: str = "（暂无 — 配置深链后用 adb / 链接打开 App，见 docs/deep-linking.md）"
     push_token: str = "（未注册 — 需 FCM/APNs，见 docs/push-notifications.md）"
     server_logs: list[str] = []
+    cloud_media_status: str = "后端启动时会自动下载样例到 uploaded_files（/_upload）。"
+    cloud_media_ready: bool = False
 
     def _append_server_log(self, line: str) -> None:
         self.server_logs = [line, *self.server_logs[:49]]
 
+    def _sync_cloud_media_status(self) -> None:
+        ready = demo_media_ready()
+        self.cloud_media_ready = ready
+        if ready:
+            self.cloud_media_status = (
+                f"已就绪\n音频: {_upload_file_url(AUDIO_NAME)}\n视频: {_upload_file_url(VIDEO_NAME)}"
+            )
+        else:
+            self.cloud_media_status = (
+                "样例尚未就绪（lifespan 仍在下载，或外网失败）。可点「重新拉取样例」。"
+            )
+
     @rx.event
     def on_app_load(self):
+        self._sync_cloud_media_status()
         return [
             mobile.setup_native_listeners(back_button="emit"),
             mobile.poll_native_events(State.on_native_events),
         ]
 
+    @rx.event(background=True)
+    async def reseed_cloud_media(self):
+        """Manual re-download into ``uploaded_files`` (normally done by lifespan)."""
+        import asyncio
+
+        async with self:
+            self.cloud_media_status = "正在重新下载样例到 uploaded_files/…"
+            self._append_server_log(log_bridge("reseed_cloud_media", source="server"))
+        info = await asyncio.to_thread(ensure_demo_media)
+        async with self:
+            self._sync_cloud_media_status()
+            if not info.get("ok"):
+                self.cloud_media_status = json.dumps(info, ensure_ascii=False, indent=2)
+            self._append_server_log(
+                log_bridge("reseed_cloud_media", result={"ok": info.get("ok")}, source="server")
+            )
+
+    @rx.event
+    def play_cloud_audio(self):
+        """Play backend ``/_upload/sample.mp3`` via bridge (simulates cloud audio URL)."""
+        url = _upload_file_url(AUDIO_NAME)
+        self.bridge_msg = f"播放云端音频: {url}"
+        self._append_server_log(
+            log_bridge("playRecording", args={"dataUrl": url}, source="server")
+        )
+        return mobile.play_recording(data_url=url, callback=State.on_bridge_result)
+
     @rx.event
     def set_tab(self, tab: str):
         self.tab = tab
         if tab == "native":
+            self._sync_cloud_media_status()
             return [
                 mobile.setup_native_listeners(back_button="emit"),
                 mobile.diagnostics(State.on_diagnostics),
@@ -592,6 +649,42 @@ def _native_panel() -> rx.Component:
         _native_btn("沙箱读文件", "file-text", State.run_fs_read),
         _native_btn("隐藏键盘", "keyboard", State.run_keyboard_hide),
         rx.separator(size="4", color_scheme="gray"),
+        rx.text("云端媒体（模拟）", size="2", weight="bold", color=_ACCENT),
+        rx.text(
+            "后端 lifespan 下载到 uploaded_files；前端用 get_upload_url / 播放 /_upload。",
+            size="1",
+            color=_MUTED,
+        ),
+        _native_btn("重新拉取样例", "cloud-download", State.reseed_cloud_media),
+        _native_btn("播放云端 MP3", "music", State.play_cloud_audio),
+        _native_btn("停止播放", "square", State.run_stop_playback),
+        _debug_block("云端媒体状态", State.cloud_media_status),
+        rx.cond(
+            State.cloud_media_ready,
+            rx.vstack(
+                rx.text("云端视频预览 (get_upload_url)", size="1", color=_MUTED),
+                rx.el.video(
+                    src=rx.get_upload_url(VIDEO_NAME),
+                    controls=True,
+                    plays_inline=True,
+                    style={
+                        "width": "100%",
+                        "maxHeight": "220px",
+                        "borderRadius": "12px",
+                        "background": "#000",
+                    },
+                ),
+                rx.el.audio(
+                    src=rx.get_upload_url(AUDIO_NAME),
+                    controls=True,
+                    style={"width": "100%"},
+                ),
+                width="100%",
+                spacing="2",
+            ),
+            rx.fragment(),
+        ),
+        rx.separator(size="4", color_scheme="gray"),
         rx.text("录音 / 回放", size="2", weight="bold", color=_ACCENT),
         _native_btn("开始录音", "mic", State.run_start_recording),
         _native_btn("停止录音", "mic-off", State.run_stop_recording),
@@ -692,4 +785,5 @@ app = rx.App(
         scaling="100%",
     ),
 )
+app.register_lifespan_task(seed_demo_media_lifespan)
 app.add_page(index, route="/", title="Shell", on_load=State.on_app_load)
