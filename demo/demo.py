@@ -216,6 +216,37 @@ class State(rx.State):
         return mobile.fs_read("demo-note.txt", State.on_bridge_result)
 
     @rx.event
+    def run_start_recording(self):
+        self._append_server_log(log_bridge("startRecording", source="server"))
+        self.bridge_msg = "正在录音…"
+        return [
+            mobile.toast("开始录音"),
+            mobile.start_recording(callback=State.on_bridge_result),
+        ]
+
+    @rx.event
+    def run_stop_recording(self):
+        self._append_server_log(log_bridge("stopRecording", source="server"))
+        self.bridge_msg = "停止录音…"
+        return mobile.stop_recording(State.on_bridge_result)
+
+    @rx.event
+    def run_play_recording(self):
+        self._append_server_log(log_bridge("playRecording", source="server"))
+        self.bridge_msg = "播放录音…"
+        return mobile.play_recording(callback=State.on_bridge_result)
+
+    @rx.event
+    def run_stop_playback(self):
+        self._append_server_log(log_bridge("stopPlayback", source="server"))
+        return mobile.stop_playback(callback=State.on_bridge_result)
+
+    @rx.event
+    def run_recording_status(self):
+        self._append_server_log(log_bridge("recordingStatus", source="server"))
+        return mobile.recording_status(State.on_bridge_result)
+
+    @rx.event
     def refresh_native_events(self):
         return mobile.poll_native_events(State.on_native_events)
 
@@ -545,6 +576,13 @@ def _native_panel() -> rx.Component:
         _native_btn("沙箱写文件", "file-plus", State.run_fs_write),
         _native_btn("沙箱读文件", "file-text", State.run_fs_read),
         _native_btn("隐藏键盘", "keyboard", State.run_keyboard_hide),
+        rx.separator(size="4", color_scheme="gray"),
+        rx.text("录音 / 回放", size="2", weight="bold", color=_ACCENT),
+        _native_btn("开始录音", "mic", State.run_start_recording),
+        _native_btn("停止录音", "mic-off", State.run_stop_recording),
+        _native_btn("播放刚录的音频", "play", State.run_play_recording),
+        _native_btn("停止播放", "square", State.run_stop_playback),
+        _native_btn("录音状态", "activity", State.run_recording_status),
         rx.separator(size="4", color_scheme="gray"),
         rx.text("Phase 5 · 深链 / 推送", size="2", weight="bold", color=_ACCENT),
         _native_btn("注册远程推送", "radio", State.run_push_register),

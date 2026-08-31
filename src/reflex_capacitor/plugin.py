@@ -7,6 +7,7 @@ import json
 import os
 import re
 import shutil
+from collections.abc import Sequence
 from pathlib import Path
 
 from reflex.plugins import Plugin
@@ -25,6 +26,33 @@ from .bridge.inject import install_bridge
 
 # Marker so we know this directory was scaffolded by reflex-capacitor.
 _SCAFFOLD_MARKER = ".reflex-capacitor"
+
+# Served under Vite ``public/`` during ``reflex run`` / export (browser + Cap www).
+_BRIDGE_PUBLIC_DIR = Path("public") / "reflex-capacitor"
+_BRIDGE_ASSET_NAMES = ("bridge.js", "image-editor.js")
+_BRIDGE_SRC_MARKER = "/reflex-capacitor/bridge.js"
+_DOCUMENT_HEAD_NEEDLE = 'jsx("head",{},'
+
+
+def _bridge_assets_dir() -> Path:
+    return Path(__file__).resolve().parent / "bridge" / "assets"
+
+
+def inject_bridge_scripts_into_document(content: str) -> str:
+    """Insert ``<script src=/reflex-capacitor/*.js>`` tags into Reflex ``_document.js``.
+
+    Idempotent. Used so ``reflex run`` (browser) loads the same packaged bridge as Cap.
+    """
+    if _BRIDGE_SRC_MARKER in content:
+        return content
+    idx = content.find(_DOCUMENT_HEAD_NEEDLE)
+    if idx < 0:
+        return content
+    tags = "".join(
+        f'jsx("script",{{src:"/reflex-capacitor/{name}"}},),' for name in _BRIDGE_ASSET_NAMES
+    )
+    at = idx + len(_DOCUMENT_HEAD_NEEDLE)
+    return content[:at] + tags + content[at:]
 
 
 @dataclasses.dataclass(kw_only=True, frozen=True)
@@ -53,6 +81,23 @@ class CapacitorPlugin(Plugin):
     web_dir: str = DEFAULT_WEB_DIR
     plugins: tuple[str, ...] = CORE_PLUGIN_IDS
     icon: str | None = None
+
+    def get_static_assets(self, **context) -> Sequence[tuple[Path, str | bytes]]:
+        """Ship packaged bridge JS into Vite ``public/`` for ``reflex run`` and export."""
+        assets_dir = _bridge_assets_dir()
+        out: list[tuple[Path, str | bytes]] = []
+        for name in _BRIDGE_ASSET_NAMES:
+            path = assets_dir / name
+            if path.is_file():
+                out.append((_BRIDGE_PUBLIC_DIR / name, path.read_text(encoding="utf-8")))
+        return out
+
+    def pre_compile(self, **context) -> None:
+        """Inject bridge ``<script>`` tags into the document root for browser / Vite."""
+        from reflex import constants
+
+        doc_path = str(Path(constants.Dirs.PAGES) / constants.PageNames.DOCUMENT_ROOT)
+        context["add_modify_task"](doc_path, inject_bridge_scripts_into_document)
 
     def _resolved_plugins(self) -> tuple[str, ...]:
         """Return validated plugin short names."""
@@ -288,6 +333,7 @@ class CapacitorPlugin(Plugin):
             copy_plugin_vendor_scripts,
             ensure_android_camera_permissions,
             ensure_android_location_permissions,
+            ensure_android_microphone_permission,
             ensure_android_notification_permission,
             ensure_android_vibrate_permission,
         )
@@ -313,6 +359,8 @@ class CapacitorPlugin(Plugin):
             ensure_android_camera_permissions(manifest)
         if "geolocation" in self._resolved_plugins():
             ensure_android_location_permissions(manifest)
+        if "voice-recorder" in self._resolved_plugins():
+            ensure_android_microphone_permission(manifest)
 
         ios_added = apply_ios_plugin_permissions(root, self._resolved_plugins())
         if ios_added:

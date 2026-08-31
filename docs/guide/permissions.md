@@ -35,6 +35,7 @@ Python ↔ Capacitor 桥接代码位于 `src/reflex_capacitor/bridge/`：
 | keyboard | 无 | 无 | |
 | browser | 无 | 无 | 应用内浏览器 |
 | filesystem | 无（沙箱内） | 无 | 仅 app 沙箱目录 |
+| voice-recorder | `RECORD_AUDIO` | `NSMicrophoneUsageDescription` | 实现在 PyPI 包内 `bridge.js`；启用 id 仅声明麦克风权限 |
 
 ## 扩展插件（demo 默认启用）
 

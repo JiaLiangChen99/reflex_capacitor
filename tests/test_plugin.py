@@ -56,6 +56,13 @@ def test_all_plugin_ids_include_core_and_extended():
     assert all(p in ALL_PLUGIN_IDS for p in CORE_PLUGIN_IDS)
     assert all(p in ALL_PLUGIN_IDS for p in EXTENDED_PLUGIN_IDS)
     assert "camera" in ALL_PLUGIN_IDS
+    assert "voice-recorder" in ALL_PLUGIN_IDS
+    assert "voice-recorder" in EXTENDED_PLUGIN_IDS
+    from reflex_capacitor.bridge.plugins import BUILTIN_BRIDGE_PLUGIN_IDS, has_npm_package
+
+    assert "voice-recorder" in BUILTIN_BRIDGE_PLUGIN_IDS
+    assert not has_npm_package("voice-recorder")
+    assert has_npm_package("camera")
 
 
 def test_phase5_plugin_ids_separate_from_all():
@@ -123,6 +130,8 @@ def test_scaffold_package_json_lists_all_plugins(tmp_path: Path, monkeypatch):
     assert "@capacitor/core" in deps
     assert "@capacitor/camera" in deps
     assert "@capacitor/geolocation" in deps
+    assert "capacitor-voice-recorder" not in deps
+    assert "@capacitor/camera" in deps
 
 
 def test_apply_icon_copies_to_android_mipmaps(tmp_path: Path, monkeypatch):

@@ -11,7 +11,7 @@ from reflex_capacitor.config import slugify
 
 PluginId: TypeAlias = str
 
-# Short plugin id (CapacitorPlugin.plugins) → @capacitor/* npm package name.
+# Short plugin id (CapacitorPlugin.plugins) → npm package installed into the Cap project.
 CAPACITOR_PLUGIN_PACKAGES: Final[dict[PluginId, str]] = {
     "local-notifications": "@capacitor/local-notifications",
     "clipboard": "@capacitor/clipboard",
@@ -32,6 +32,10 @@ CAPACITOR_PLUGIN_PACKAGES: Final[dict[PluginId, str]] = {
     "push-notifications": "@capacitor/push-notifications",
 }
 
+# Implemented inside the PyPI-shipped ``bridge.js`` (no extra npm package).
+# Enabling the id only wires OS microphone permissions via finalize_bridge.
+BUILTIN_BRIDGE_PLUGIN_IDS: Final[frozenset[PluginId]] = frozenset({"voice-recorder"})
+
 # Bundled with every app unless CapacitorPlugin.plugins overrides the tuple.
 CORE_PLUGIN_IDS: Final[tuple[PluginId, ...]] = (
     "local-notifications",
@@ -46,7 +50,7 @@ CORE_PLUGIN_IDS: Final[tuple[PluginId, ...]] = (
     "network",
 )
 
-# Optional plugins — camera, storage, location, etc.
+# Optional plugins — camera, storage, location, built-in recorder, etc.
 EXTENDED_PLUGIN_IDS: Final[tuple[PluginId, ...]] = (
     "preferences",
     "camera",
@@ -54,6 +58,7 @@ EXTENDED_PLUGIN_IDS: Final[tuple[PluginId, ...]] = (
     "keyboard",
     "browser",
     "filesystem",
+    "voice-recorder",
 )
 
 # Phase 5 — push, etc. (enable explicitly; may need FCM / APNs project setup).
@@ -64,6 +69,8 @@ PHASE5_PLUGIN_IDS: Final[tuple[PluginId, ...]] = (
 # Core + extended; used by the repo demo (rxconfig.py).
 ALL_PLUGIN_IDS: Final[tuple[PluginId, ...]] = CORE_PLUGIN_IDS + EXTENDED_PLUGIN_IDS
 
+_KNOWN_PLUGIN_IDS: Final[frozenset[PluginId]] = frozenset(CAPACITOR_PLUGIN_PACKAGES) | BUILTIN_BRIDGE_PLUGIN_IDS
+
 _ANDROID_PERMISSION_POST_NOTIFICATIONS: Final = "android.permission.POST_NOTIFICATIONS"
 _ANDROID_PERMISSION_VIBRATE: Final = "android.permission.VIBRATE"
 _ANDROID_PERMISSION_CAMERA: Final = "android.permission.CAMERA"
@@ -72,9 +79,11 @@ _ANDROID_PERMISSION_READ_EXTERNAL_STORAGE: Final = "android.permission.READ_EXTE
 _ANDROID_PERMISSION_WRITE_EXTERNAL_STORAGE: Final = "android.permission.WRITE_EXTERNAL_STORAGE"
 _ANDROID_PERMISSION_FINE_LOCATION: Final = "android.permission.ACCESS_FINE_LOCATION"
 _ANDROID_PERMISSION_COARSE_LOCATION: Final = "android.permission.ACCESS_COARSE_LOCATION"
+_ANDROID_PERMISSION_RECORD_AUDIO: Final = "android.permission.RECORD_AUDIO"
 
 __all__ = [
     "ALL_PLUGIN_IDS",
+    "BUILTIN_BRIDGE_PLUGIN_IDS",
     "CAPACITOR_PLUGIN_PACKAGES",
     "CORE_PLUGIN_IDS",
     "EXTENDED_PLUGIN_IDS",
@@ -84,12 +93,19 @@ __all__ = [
     "copy_plugin_vendor_scripts",
     "ensure_android_camera_permissions",
     "ensure_android_location_permissions",
+    "ensure_android_microphone_permission",
     "ensure_android_notification_permission",
     "ensure_android_permissions",
     "ensure_android_vibrate_permission",
+    "has_npm_package",
     "resolve_plugin_ids",
     "vendor_script_filename",
 ]
+
+
+def has_npm_package(plugin_id: PluginId) -> bool:
+    """Return True when the plugin is installed from npm into the Capacitor project."""
+    return plugin_id in CAPACITOR_PLUGIN_PACKAGES
 
 
 def vendor_script_filename(plugin_id: PluginId) -> str:
@@ -110,9 +126,9 @@ def resolve_plugin_ids(plugin_ids: tuple[PluginId, ...]) -> tuple[PluginId, ...]
     Raises:
         ValueError: If an unknown plugin id is requested.
     """
-    unknown = [pid for pid in plugin_ids if pid not in CAPACITOR_PLUGIN_PACKAGES]
+    unknown = [pid for pid in plugin_ids if pid not in _KNOWN_PLUGIN_IDS]
     if unknown:
-        known = sorted(CAPACITOR_PLUGIN_PACKAGES)
+        known = sorted(_KNOWN_PLUGIN_IDS)
         msg = f"reflex-capacitor: unknown plugin(s) {unknown!r}; known: {known}"
         raise ValueError(msg)
     return plugin_ids
@@ -125,6 +141,9 @@ def apply_package_json_deps(
     capacitor_version: str,
 ) -> None:
     """Merge Capacitor core and selected plugin npm deps into ``package.json``.
+
+    Built-in bridge features (see ``BUILTIN_BRIDGE_PLUGIN_IDS``) are skipped — their
+    JS ships inside the PyPI package ``bridge.js``.
 
     Args:
         package_json_path: Path to ``capacitor/package.json``.
@@ -145,6 +164,8 @@ def apply_package_json_deps(
     dev_dependencies["@capacitor/cli"] = capacitor_version
 
     for plugin_id in plugin_ids:
+        if not has_npm_package(plugin_id):
+            continue
         dependencies[CAPACITOR_PLUGIN_PACKAGES[plugin_id]] = capacitor_version
 
     if package.get("name") in (None, "reflex-capacitor-app"):
@@ -161,6 +182,7 @@ def copy_plugin_vendor_scripts(
     """Copy ``capacitor.js`` and plugin bundles into the static export tree.
 
     Must run after ``npm install`` in ``capacitor_root`` so ``node_modules`` exists.
+    Built-in bridge features have no vendor ``plugin.js`` to copy.
 
     Args:
         capacitor_root: Capacitor project root (contains ``node_modules/``).
@@ -179,6 +201,8 @@ def copy_plugin_vendor_scripts(
     shutil.copyfile(core_js, vendor_dir / "capacitor.js")
 
     for plugin_id in plugin_ids:
+        if not has_npm_package(plugin_id):
+            continue
         npm_package = CAPACITOR_PLUGIN_PACKAGES[plugin_id]
         plugin_js = cap_root / "node_modules" / npm_package / "dist" / "plugin.js"
         if not plugin_js.is_file():
@@ -222,6 +246,11 @@ def ensure_android_location_permissions(manifest_path: Path | str) -> None:
             _ANDROID_PERMISSION_COARSE_LOCATION,
         ),
     )
+
+
+def ensure_android_microphone_permission(manifest_path: Path | str) -> None:
+    """Add ``RECORD_AUDIO`` for built-in voice recording in ``bridge.js``."""
+    _ensure_android_permission(manifest_path, _ANDROID_PERMISSION_RECORD_AUDIO)
 
 
 def ensure_android_permissions(manifest_path: Path | str, permissions: tuple[str, ...]) -> None:

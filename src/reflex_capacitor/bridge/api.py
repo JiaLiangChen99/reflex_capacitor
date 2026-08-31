@@ -234,6 +234,58 @@ def fs_read(path: str, callback: Any, *, directory: str = "DATA") -> rx.event.Ev
     return call_bridge("fsRead", {"path": path, "directory": directory}, callback=callback)
 
 
+def start_recording(
+    *,
+    directory: str | None = None,
+    sub_directory: str | None = None,
+    callback: Any = None,
+) -> rx.event.EventSpec:
+    """Start microphone recording (built into packaged ``bridge.js``).
+
+    Enable ``voice-recorder`` in ``CapacitorPlugin.plugins`` so finalize_bridge
+    writes Android ``RECORD_AUDIO`` / iOS microphone usage strings.
+
+    ``directory`` / ``sub_directory`` are reserved for future sandbox writes and
+    currently ignored (audio is returned as a ``dataUrl`` on stop).
+    """
+    args: dict[str, Any] = {}
+    if directory is not None:
+        args["directory"] = directory
+    if sub_directory is not None:
+        args["subDirectory"] = sub_directory
+    return call_bridge("startRecording", args, callback=callback)
+
+
+def stop_recording(callback: Any) -> rx.event.EventSpec:
+    """Stop recording; callback receives ``{ok, dataUrl, mimeType, msDuration, path, ...}``."""
+    return call_bridge("stopRecording", callback=callback)
+
+
+def play_recording(
+    *,
+    data_url: str | None = None,
+    path: str | None = None,
+    callback: Any = None,
+) -> rx.event.EventSpec:
+    """Play the last recording, or an explicit ``data_url`` / filesystem ``path``."""
+    args: dict[str, Any] = {}
+    if data_url is not None:
+        args["dataUrl"] = data_url
+    if path is not None:
+        args["path"] = path
+    return call_bridge("playRecording", args, callback=callback)
+
+
+def stop_playback(*, callback: Any = None) -> rx.event.EventSpec:
+    """Stop in-WebView playback started by :func:`play_recording`."""
+    return call_bridge("stopPlayback", callback=callback)
+
+
+def recording_status(callback: Any) -> rx.event.EventSpec:
+    """Return current recorder status (``RECORDING`` / ``PAUSED`` / ``NONE``)."""
+    return call_bridge("recordingStatus", callback=callback)
+
+
 def invoke(
     plugin: str,
     method: str,

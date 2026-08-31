@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented here.
 
+## [Unreleased]
+
+### Features
+
+- Built-in voice recording / playback in packaged ``bridge.js`` (``mobile.start_recording`` / ``stop_recording`` / ``play_recording``); enable ``voice-recorder`` for mic permissions
+- ``CapacitorPlugin`` loads bridge scripts during ``reflex run`` (browser) via Vite ``public/`` + document inject
+
+### Fixes
+
+- Proxy unit test expected wrong Gradle port (``7892`` typo vs ``7890``)
+
 ## [0.3.2] — 2026-08-25
 
 ### Fixes

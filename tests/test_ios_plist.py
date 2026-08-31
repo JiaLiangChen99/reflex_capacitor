@@ -39,13 +39,15 @@ def test_ensure_ios_plist_string_idempotent(tmp_path: Path):
 def test_apply_ios_plugin_permissions_camera_and_geo(tmp_path: Path):
     plist = tmp_path / "ios" / "App" / "App" / "Info.plist"
     _write_plist(plist, {})
-    added = apply_ios_plugin_permissions(tmp_path, CORE_PLUGIN_IDS + ("camera", "geolocation"))
+    added = apply_ios_plugin_permissions(tmp_path, CORE_PLUGIN_IDS + ("camera", "geolocation", "voice-recorder"))
     assert "NSCameraUsageDescription" in added
     assert "NSLocationWhenInUseUsageDescription" in added
+    assert "NSMicrophoneUsageDescription" in added
     with plist.open("rb") as fh:
         data = plistlib.load(fh)
     assert data["NSCameraUsageDescription"]
     assert data["NSLocationWhenInUseUsageDescription"]
+    assert data["NSMicrophoneUsageDescription"]
 
 
 def test_ensure_ios_background_mode_idempotent(tmp_path: Path):

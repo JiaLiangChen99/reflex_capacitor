@@ -6,7 +6,7 @@ import re
 import shutil
 from pathlib import Path
 
-from .plugins import vendor_script_filename
+from .plugins import has_npm_package, vendor_script_filename
 
 _BRIDGE_BEGIN = "<!-- reflex-capacitor bridge begin -->"
 _BRIDGE_END = "<!-- reflex-capacitor bridge end -->"
@@ -40,6 +40,8 @@ def build_bridge_snippet(plugins: tuple[str, ...]) -> str:
     lines = [_BRIDGE_BEGIN]
     lines.append(f'    <script src="{_VENDOR_PREFIX}capacitor.js"></script>')
     for plugin_id in plugins:
+        if not has_npm_package(plugin_id):
+            continue
         lines.append(
             f'    <script src="{_VENDOR_PREFIX}{vendor_script_filename(plugin_id)}"></script>'
         )

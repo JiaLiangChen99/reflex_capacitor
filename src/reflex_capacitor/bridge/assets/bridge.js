@@ -14,6 +14,12 @@
   let listenersReady = false;
   let pushListenersReady = false;
   let backButtonMode = "emit";
+  let lastRecording = null;
+  let playbackAudio = null;
+  let mediaRecorder = null;
+  let mediaChunks = [];
+  let mediaStream = null;
+  let recordingStartedAt = 0;
 
   function capPlatform() {
     return Cap && Cap.getPlatform ? Cap.getPlatform() : "web";
@@ -55,6 +61,58 @@
     if (Plugins[name]) return Plugins[name];
     console.warn("reflex-capacitor: Capacitor plugin not loaded:", name);
     return null;
+  }
+
+  function recordingPlayUrl(rec) {
+    if (!rec) return "";
+    if (rec.dataUrl) return rec.dataUrl;
+    if (rec.playUrl) return rec.playUrl;
+    return "";
+  }
+
+  function pickRecordingMimeType() {
+    if (typeof MediaRecorder === "undefined" || !MediaRecorder.isTypeSupported) {
+      return "";
+    }
+    const candidates = [
+      "audio/webm;codecs=opus",
+      "audio/webm",
+      "audio/mp4",
+      "audio/aac",
+      "audio/ogg;codecs=opus",
+    ];
+    for (let i = 0; i < candidates.length; i++) {
+      if (MediaRecorder.isTypeSupported(candidates[i])) {
+        return candidates[i];
+      }
+    }
+    return "";
+  }
+
+  function stopMediaStream() {
+    if (!mediaStream) return;
+    const tracks = mediaStream.getTracks ? mediaStream.getTracks() : [];
+    for (let i = 0; i < tracks.length; i++) {
+      try {
+        tracks[i].stop();
+      } catch (_err) {
+        /* ignore */
+      }
+    }
+    mediaStream = null;
+  }
+
+  function blobToDataUrl(blob) {
+    return new Promise(function (resolve, reject) {
+      const reader = new FileReader();
+      reader.onloadend = function () {
+        resolve(typeof reader.result === "string" ? reader.result : "");
+      };
+      reader.onerror = function () {
+        reject(reader.error || new Error("read_failed"));
+      };
+      reader.readAsDataURL(blob);
+    });
   }
 
   function addLog(level, method, detail) {
@@ -614,6 +672,152 @@
         path: path,
         data: result.data != null ? result.data : "",
         directory: directory || "DATA",
+      };
+    },
+
+    async startRecording() {
+      if (typeof MediaRecorder === "undefined") {
+        return { ok: false, error: "device_cannot_record" };
+      }
+      if (
+        !navigator.mediaDevices ||
+        typeof navigator.mediaDevices.getUserMedia !== "function"
+      ) {
+        return { ok: false, error: "device_cannot_record" };
+      }
+      if (mediaRecorder && mediaRecorder.state === "recording") {
+        return { ok: false, error: "ALREADY_RECORDING" };
+      }
+      try {
+        stopMediaStream();
+        mediaChunks = [];
+        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mimeType = pickRecordingMimeType();
+        mediaRecorder = mimeType
+          ? new MediaRecorder(mediaStream, { mimeType: mimeType })
+          : new MediaRecorder(mediaStream);
+        mediaRecorder.ondataavailable = function (event) {
+          if (event.data && event.data.size > 0) {
+            mediaChunks.push(event.data);
+          }
+        };
+        recordingStartedAt = Date.now();
+        mediaRecorder.start();
+        return { ok: true, recording: true, mimeType: mediaRecorder.mimeType || mimeType || "" };
+      } catch (err) {
+        stopMediaStream();
+        mediaRecorder = null;
+        const message = String(err && err.message ? err.message : err);
+        if (/Permission|NotAllowed|Denied/i.test(message)) {
+          return { ok: false, error: "permission_denied" };
+        }
+        return { ok: false, error: message };
+      }
+    },
+
+    async stopRecording() {
+      if (!mediaRecorder || mediaRecorder.state === "inactive") {
+        return { ok: false, error: "RECORDING_HAS_NOT_STARTED" };
+      }
+      try {
+        const recorder = mediaRecorder;
+        const blob = await new Promise(function (resolve, reject) {
+          const onStop = function () {
+            recorder.removeEventListener("stop", onStop);
+            recorder.removeEventListener("error", onError);
+            const type = recorder.mimeType || (mediaChunks[0] && mediaChunks[0].type) || "audio/webm";
+            resolve(new Blob(mediaChunks, { type: type }));
+          };
+          const onError = function (event) {
+            recorder.removeEventListener("stop", onStop);
+            recorder.removeEventListener("error", onError);
+            reject((event && event.error) || new Error("FAILED_TO_FETCH_RECORDING"));
+          };
+          recorder.addEventListener("stop", onStop);
+          recorder.addEventListener("error", onError);
+          recorder.stop();
+        });
+        stopMediaStream();
+        mediaRecorder = null;
+        mediaChunks = [];
+        const msDuration = Math.max(0, Date.now() - (recordingStartedAt || Date.now()));
+        recordingStartedAt = 0;
+        if (!blob || !blob.size) {
+          return { ok: false, error: "EMPTY_RECORDING", msDuration: msDuration };
+        }
+        const dataUrl = await blobToDataUrl(blob);
+        const mimeType = blob.type || "audio/webm";
+        lastRecording = {
+          dataUrl: dataUrl,
+          playUrl: dataUrl,
+          mimeType: mimeType,
+          msDuration: msDuration,
+          path: "",
+        };
+        return {
+          ok: true,
+          recording: false,
+          dataUrl: dataUrl,
+          playUrl: dataUrl,
+          mimeType: mimeType,
+          path: "",
+          msDuration: msDuration,
+          hasAudio: !!dataUrl,
+        };
+      } catch (err) {
+        stopMediaStream();
+        mediaRecorder = null;
+        mediaChunks = [];
+        recordingStartedAt = 0;
+        return { ok: false, error: String(err && err.message ? err.message : err) };
+      }
+    },
+
+    async playRecording({ dataUrl, path }) {
+      let url = dataUrl || "";
+      if (!url && path && Cap && typeof Cap.convertFileSrc === "function") {
+        url = Cap.convertFileSrc(path);
+      }
+      if (!url) {
+        url = recordingPlayUrl(lastRecording);
+      }
+      if (!url) {
+        return { ok: false, error: "no_recording" };
+      }
+      try {
+        if (playbackAudio) {
+          playbackAudio.pause();
+          playbackAudio = null;
+        }
+        playbackAudio = new Audio(url);
+        await playbackAudio.play();
+        return { ok: true, playing: true };
+      } catch (err) {
+        return { ok: false, error: String(err && err.message ? err.message : err) };
+      }
+    },
+
+    async stopPlayback() {
+      if (playbackAudio) {
+        playbackAudio.pause();
+        playbackAudio.currentTime = 0;
+        playbackAudio = null;
+      }
+      return { ok: true, playing: false };
+    },
+
+    async recordingStatus() {
+      let status = "NONE";
+      if (mediaRecorder) {
+        if (mediaRecorder.state === "recording") status = "RECORDING";
+        else if (mediaRecorder.state === "paused") status = "PAUSED";
+      }
+      return {
+        ok: true,
+        status: status,
+        hasLastRecording: !!(lastRecording && recordingPlayUrl(lastRecording)),
+        lastMsDuration: lastRecording ? lastRecording.msDuration : 0,
+        mediaRecorderSupported: typeof MediaRecorder !== "undefined",
       };
     },
 

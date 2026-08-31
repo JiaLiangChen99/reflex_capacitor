@@ -37,7 +37,7 @@ CapacitorPlugin(
 | 常量 | 内容 | 何时用 |
 |------|------|--------|
 | `CORE_PLUGIN_IDS` | 通知、剪贴板、分享、状态栏、设备、网络… | 最小壳 |
-| `EXTENDED_PLUGIN_IDS` | 相机、定位、文件系统、键盘、browser… | 需要传感器/文件 |
+| `EXTENDED_PLUGIN_IDS` | 相机、定位、文件系统、键盘、browser、录音… | 需要传感器/文件/麦克风 |
 | `ALL_PLUGIN_IDS` | CORE + EXTENDED | **PyPI / 通用默认推荐** |
 | `PHASE5_PLUGIN_IDS` | 当前含 `push-notifications` | **显式**需要远程推送时再加 |
 

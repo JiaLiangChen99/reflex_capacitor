@@ -41,7 +41,7 @@ def test_child_env_sets_proxy_and_gradle_opts() -> None:
     assert out["http_proxy"] == "http://127.0.0.1:7890"
     assert out["HTTPS_PROXY"] == "http://127.0.0.1:7890"
     assert "-Dhttp.proxyHost=127.0.0.1" in out["GRADLE_OPTS"]
-    assert "-Dhttp.proxyPort=7892" in out["GRADLE_OPTS"]
+    assert "-Dhttp.proxyPort=7890" in out["GRADLE_OPTS"]
 
 
 def test_gradle_jvm_proxy_args() -> None:

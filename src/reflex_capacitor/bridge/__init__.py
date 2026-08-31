@@ -7,18 +7,21 @@ from .inject import install_bridge
 from .log import log_bridge
 from .plugins import (
     ALL_PLUGIN_IDS,
+    BUILTIN_BRIDGE_PLUGIN_IDS,
     CAPACITOR_PLUGIN_PACKAGES,
     CORE_PLUGIN_IDS,
     EXTENDED_PLUGIN_IDS,
     apply_package_json_deps,
     copy_plugin_vendor_scripts,
     ensure_android_notification_permission,
+    has_npm_package,
     resolve_plugin_ids,
     vendor_script_filename,
 )
 
 __all__ = [
     "ALL_PLUGIN_IDS",
+    "BUILTIN_BRIDGE_PLUGIN_IDS",
     "CAPACITOR_PLUGIN_PACKAGES",
     "CORE_PLUGIN_IDS",
     "EXTENDED_PLUGIN_IDS",
@@ -29,6 +32,7 @@ __all__ = [
     "apply_package_json_deps",
     "copy_plugin_vendor_scripts",
     "ensure_android_notification_permission",
+    "has_npm_package",
     "resolve_plugin_ids",
     "vendor_script_filename",
 ]

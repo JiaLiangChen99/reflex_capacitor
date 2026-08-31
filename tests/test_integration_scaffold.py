@@ -76,7 +76,10 @@ def test_scaffold_package_json_lists_requested_plugins(app_root: Path, monkeypat
     assert "@capacitor/push-notifications" in deps
     assert "@capacitor/camera" in deps
     for plugin_id in plugins:
+        if plugin_id not in CAPACITOR_PLUGIN_PACKAGES:
+            continue
         assert CAPACITOR_PLUGIN_PACKAGES[plugin_id] in deps
+    assert "capacitor-voice-recorder" not in deps
 
 
 def test_post_build_copies_export_and_injects_bridge(app_root: Path, monkeypatch):
@@ -158,6 +161,7 @@ def test_finalize_bridge_patches_android_permissions(app_root: Path, monkeypatch
     assert "android.permission.VIBRATE" in text
     assert "android.permission.CAMERA" in text
     assert "android.permission.ACCESS_FINE_LOCATION" in text
+    assert "android.permission.RECORD_AUDIO" in text
     assert text.count("android.permission.POST_NOTIFICATIONS") == 1
 
 
@@ -175,7 +179,7 @@ def test_finalize_bridge_patches_ios_plist_when_present(app_root: Path, monkeypa
     with plist.open("wb") as fh:
         plistlib.dump({}, fh)
 
-    plugins = ("camera", "geolocation")
+    plugins = ("camera", "geolocation", "voice-recorder")
     seed_fake_node_modules(cap_root, plugins)
     seed_android_manifest(cap_root)
 
@@ -186,6 +190,7 @@ def test_finalize_bridge_patches_ios_plist_when_present(app_root: Path, monkeypa
         data = plistlib.load(fh)
     assert data.get("NSCameraUsageDescription")
     assert data.get("NSLocationWhenInUseUsageDescription")
+    assert data.get("NSMicrophoneUsageDescription")
 
 
 def test_l1_pipeline_scaffold_post_build_finalize(app_root: Path, monkeypatch):

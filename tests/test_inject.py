@@ -55,3 +55,11 @@ def test_install_bridge_copies_js_and_injects(tmp_path: Path):
     assert _BRIDGE_BEGIN in html
     assert "image-editor.js" in html
     assert "app.plugin.js" in html
+
+
+def test_builtin_bridge_plugins_skip_vendor_script_tags():
+    snippet = build_bridge_snippet(("toast", "voice-recorder"))
+    assert "toast.plugin.js" in snippet
+    assert "capacitor-voice-recorder.plugin.js" not in snippet
+    # Recording JS ships inside packaged bridge.js, not a separate vendor tag.
+    assert "bridge.js" in snippet

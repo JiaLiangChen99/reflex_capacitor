@@ -13,6 +13,7 @@ _IOS_CAMERA_USAGE: Final = "Uses the camera to capture photos in the app."
 _IOS_PHOTOS_USAGE: Final = "Uses your photo library to pick images."
 _IOS_PHOTOS_ADD_USAGE: Final = "Saves photos you capture to your library when you choose."
 _IOS_LOCATION_WHEN_IN_USE: Final = "Uses your location while you use map and location features."
+_IOS_MICROPHONE_USAGE: Final = "Uses the microphone to record voice notes in the app."
 _IOS_BLUETOOTH_ALWAYS: Final = "Uses Bluetooth to connect to nearby devices."
 
 __all__ = [
@@ -105,6 +106,9 @@ def apply_ios_plugin_permissions(
     if "geolocation" in plugin_ids:
         if ensure_ios_plist_string(plist_path, "NSLocationWhenInUseUsageDescription", _IOS_LOCATION_WHEN_IN_USE):
             added.append("NSLocationWhenInUseUsageDescription")
+    if "voice-recorder" in plugin_ids:
+        if ensure_ios_plist_string(plist_path, "NSMicrophoneUsageDescription", _IOS_MICROPHONE_USAGE):
+            added.append("NSMicrophoneUsageDescription")
     if "push-notifications" in plugin_ids:
         if ensure_ios_background_mode(plist_path, "remote-notification"):
             added.append("UIBackgroundModes:remote-notification")

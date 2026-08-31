@@ -66,10 +66,10 @@ Android 真机 USB 调试时，Chrome 打开 `chrome://inspect` 可查看 WebVie
 
 | 现象 | 排查 |
 |------|------|
-| 诊断 `bridge_not_loaded` | 未执行 `reflex-capacitor sync`，或 `index.html` 未注入 bridge |
-| `pluginsMissing` 非空 | `npm install` / `finalize_bridge` 未跑，vendor JS 缺失 |
+| 诊断 `bridge_not_loaded` | 刷新页面；确认 `rxconfig` 含 `CapacitorPlugin`；重启 `reflex run`。Cap 壳还需 `sync` |
+| `pluginsMissing` 非空 | `npm install` / `finalize_bridge` 未跑，vendor JS 缺失（浏览器下多数 Cap 插件本就会缺失，属正常） |
 | 客户端有日志、服务端无 | 正常：void 调用（notify/toast）只在 WebView 执行；带 callback 的才会回后端 |
-| `isNative: false` | 在浏览器打开，非 Capacitor 壳 |
+| `isNative: false` | 在浏览器打开，非 Capacitor 壳 — **可测录音/回放**（MediaRecorder）；相机/推送等仍需真机 |
 | WebSocket / 连不上后端 | 后端 `0.0.0.0`、同 Wi‑Fi、HTTP 需 cleartext；见 [android-build.md](android-build.md) |
 | Gradle / 缺 SDK | `reflex-capacitor check --android` |
 

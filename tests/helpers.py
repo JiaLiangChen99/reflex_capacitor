@@ -26,6 +26,8 @@ def seed_fake_node_modules(cap_root: Path, plugin_ids: tuple[str, ...]) -> None:
     (core_dist / "capacitor.js").write_text("// stub capacitor core\n", encoding="utf-8")
 
     for plugin_id in plugin_ids:
+        if plugin_id not in CAPACITOR_PLUGIN_PACKAGES:
+            continue
         npm_package = CAPACITOR_PLUGIN_PACKAGES[plugin_id]
         plugin_dist = cap_root / "node_modules" / npm_package / "dist"
         plugin_dist.mkdir(parents=True, exist_ok=True)
