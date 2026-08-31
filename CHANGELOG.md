@@ -7,6 +7,7 @@ All notable changes to this project are documented here.
 ### Features
 
 - ``CapacitorPlugin.plugins`` defaults to ``ALL_PLUGIN_IDS`` (core + extended; push still opt-in via ``PHASE5_PLUGIN_IDS``)
+- ``reflex_capacitor.get_upload_url`` / ``resolve_backend_base`` — absolute ``/_upload`` URLs using Cap ``backend_url`` / ``REFLEX_CAPACITOR_DEV_BACKEND_URL`` (avoids localhost in APK)
 - Built-in voice recording / playback in packaged ``bridge.js`` (``mobile.start_recording`` / ``stop_recording`` / ``play_recording``); enable ``voice-recorder`` for mic permissions
 - ``CapacitorPlugin`` loads bridge scripts during ``reflex run`` (browser) via Vite ``public/`` + document inject
 - Android mic: also declare ``MODIFY_AUDIO_SETTINGS`` (required by WebView ``getUserMedia``; missing it causes ``permission_denied`` even when RECORD_AUDIO is granted)

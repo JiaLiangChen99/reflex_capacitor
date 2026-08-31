@@ -6,8 +6,7 @@ import json
 import logging
 
 import reflex as rx
-from reflex.constants import Endpoint
-from reflex_capacitor import mobile
+from reflex_capacitor import CapacitorPlugin, get_upload_url, mobile
 from reflex_capacitor.bridge import log_bridge
 
 from demo.cloud_media import (
@@ -32,7 +31,7 @@ _ACCENT_DIM = "#2d7368"
 
 def _upload_file_url(name: str) -> str:
     """Absolute backend URL for ``/_upload/<name>`` (Capacitor needs a full URL)."""
-    return f"{Endpoint.UPLOAD.get_url().rstrip('/')}/{name}"
+    return get_upload_url(name)
 
 
 class State(rx.State):
@@ -651,7 +650,7 @@ def _native_panel() -> rx.Component:
         rx.separator(size="4", color_scheme="gray"),
         rx.text("云端媒体（模拟）", size="2", weight="bold", color=_ACCENT),
         rx.text(
-            "后端 lifespan 下载到 uploaded_files；前端用 get_upload_url / 播放 /_upload。",
+            "后端 lifespan 下载到 uploaded_files；前端用 reflex_capacitor.get_upload_url。",
             size="1",
             color=_MUTED,
         ),
@@ -662,9 +661,9 @@ def _native_panel() -> rx.Component:
         rx.cond(
             State.cloud_media_ready,
             rx.vstack(
-                rx.text("云端视频预览 (get_upload_url)", size="1", color=_MUTED),
+                rx.text("云端视频预览 (Cap get_upload_url)", size="1", color=_MUTED),
                 rx.el.video(
-                    src=rx.get_upload_url(VIDEO_NAME),
+                    src=get_upload_url(VIDEO_NAME),
                     controls=True,
                     plays_inline=True,
                     style={
@@ -675,7 +674,7 @@ def _native_panel() -> rx.Component:
                     },
                 ),
                 rx.el.audio(
-                    src=rx.get_upload_url(AUDIO_NAME),
+                    src=get_upload_url(AUDIO_NAME),
                     controls=True,
                     style={"width": "100%"},
                 ),
