@@ -162,6 +162,7 @@ def test_finalize_bridge_patches_android_permissions(app_root: Path, monkeypatch
     assert "android.permission.CAMERA" in text
     assert "android.permission.ACCESS_FINE_LOCATION" in text
     assert "android.permission.RECORD_AUDIO" in text
+    assert "android.permission.MODIFY_AUDIO_SETTINGS" in text
     assert text.count("android.permission.POST_NOTIFICATIONS") == 1
 
 

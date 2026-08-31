@@ -80,6 +80,7 @@ _ANDROID_PERMISSION_WRITE_EXTERNAL_STORAGE: Final = "android.permission.WRITE_EX
 _ANDROID_PERMISSION_FINE_LOCATION: Final = "android.permission.ACCESS_FINE_LOCATION"
 _ANDROID_PERMISSION_COARSE_LOCATION: Final = "android.permission.ACCESS_COARSE_LOCATION"
 _ANDROID_PERMISSION_RECORD_AUDIO: Final = "android.permission.RECORD_AUDIO"
+_ANDROID_PERMISSION_MODIFY_AUDIO_SETTINGS: Final = "android.permission.MODIFY_AUDIO_SETTINGS"
 
 __all__ = [
     "ALL_PLUGIN_IDS",
@@ -249,8 +250,20 @@ def ensure_android_location_permissions(manifest_path: Path | str) -> None:
 
 
 def ensure_android_microphone_permission(manifest_path: Path | str) -> None:
-    """Add ``RECORD_AUDIO`` for built-in voice recording in ``bridge.js``."""
-    _ensure_android_permission(manifest_path, _ANDROID_PERMISSION_RECORD_AUDIO)
+    """Add mic permissions for WebView ``getUserMedia`` / MediaRecorder.
+
+    Capacitor's WebChromeClient grants ``AUDIO_CAPTURE`` only when both
+    ``RECORD_AUDIO`` and ``MODIFY_AUDIO_SETTINGS`` are in the manifest; missing
+    the latter yields ``NotAllowedError`` even if the user enabled the mic in
+    system app settings.
+    """
+    ensure_android_permissions(
+        manifest_path,
+        (
+            _ANDROID_PERMISSION_RECORD_AUDIO,
+            _ANDROID_PERMISSION_MODIFY_AUDIO_SETTINGS,
+        ),
+    )
 
 
 def ensure_android_permissions(manifest_path: Path | str, permissions: tuple[str, ...]) -> None:

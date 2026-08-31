@@ -707,11 +707,21 @@
       } catch (err) {
         stopMediaStream();
         mediaRecorder = null;
+        const name = err && err.name ? String(err.name) : "";
         const message = String(err && err.message ? err.message : err);
-        if (/Permission|NotAllowed|Denied/i.test(message)) {
-          return { ok: false, error: "permission_denied" };
+        if (
+          name === "NotAllowedError" ||
+          name === "PermissionDeniedError" ||
+          /Permission|NotAllowed|Denied/i.test(message)
+        ) {
+          return {
+            ok: false,
+            error: "permission_denied",
+            detail: name || message,
+            hint: "Android needs RECORD_AUDIO + MODIFY_AUDIO_SETTINGS in the APK manifest; reinstall after sync.",
+          };
         }
-        return { ok: false, error: message };
+        return { ok: false, error: message, detail: name || undefined };
       }
     },
 
