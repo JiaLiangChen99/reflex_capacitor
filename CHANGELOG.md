@@ -6,10 +6,12 @@ All notable changes to this project are documented here.
 
 ### Features
 
+- ``CapacitorPlugin.plugins`` defaults to ``ALL_PLUGIN_IDS`` (core + extended; push still opt-in via ``PHASE5_PLUGIN_IDS``)
 - Built-in voice recording / playback in packaged ``bridge.js`` (``mobile.start_recording`` / ``stop_recording`` / ``play_recording``); enable ``voice-recorder`` for mic permissions
 - ``CapacitorPlugin`` loads bridge scripts during ``reflex run`` (browser) via Vite ``public/`` + document inject
 - Android mic: also declare ``MODIFY_AUDIO_SETTINGS`` (required by WebView ``getUserMedia``; missing it causes ``permission_denied`` even when RECORD_AUDIO is granted)
 - System TTS: ``mobile.speak`` / ``stop_speak`` prefer native ``@capacitor-community/text-to-speech`` (Cap 7 → npm ``^6.1.0``), fall back to ``speechSynthesis``
+- TTS audio focus (Android): ``finalize_bridge`` installs local ``AudioFocusPlugin``; ``mobile.speak`` defaults to ``audio_focus="pause"`` so background music typically pauses (``duck`` / ``none`` also supported)
 
 ### Fixes
 

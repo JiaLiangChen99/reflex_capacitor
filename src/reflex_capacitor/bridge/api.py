@@ -293,6 +293,7 @@ def speak(
     rate: float = 1.0,
     pitch: float = 1.0,
     volume: float = 1.0,
+    audio_focus: Literal["pause", "duck", "none"] = "pause",
     callback: Any = None,
 ) -> rx.event.EventSpec:
     """Speak ``text`` with on-device system TTS.
@@ -301,7 +302,9 @@ def speak(
     is enabled (recommended on Android WebView). Falls back to Web
     ``speechSynthesis`` in browsers that support it.
 
-    Cloud LLM replies should return text only; call this to announce locally.
+    ``audio_focus`` (Android): ``pause`` requests transient focus so many music
+    apps pause; ``duck`` only lowers their volume; ``none`` mixes with others.
+    iOS uses TTS ``category=playback``.
     """
     return call_bridge(
         "speak",
@@ -311,6 +314,7 @@ def speak(
             "rate": rate,
             "pitch": pitch,
             "volume": volume,
+            "audioFocus": audio_focus,
         },
         callback=callback,
     )

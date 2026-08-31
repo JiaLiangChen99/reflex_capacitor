@@ -70,6 +70,7 @@ def speak(
     rate: float = 1.0,
     pitch: float = 1.0,
     volume: float = 1.0,
+    audio_focus: Literal["pause", "duck", "none"] = "pause",
     callback: Any = None,
 ) -> rx.event.EventSpec: ...
 def stop_speak(*, callback: Any = None) -> rx.event.EventSpec: ...

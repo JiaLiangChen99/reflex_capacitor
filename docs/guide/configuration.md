@@ -15,42 +15,42 @@
 | `app_name` | Reflex `app_name` | 桌面显示名 |
 | `capacitor_dir` | `"capacitor"` | Cap 工程目录 |
 | `web_dir` | `"www"` | 静态资源目录名（相对 `capacitor_dir`） |
-| `plugins` | **`CORE_PLUGIN_IDS`** | 短 id 元组；多数 App 建议显式传 `ALL_PLUGIN_IDS` |
+| `plugins` | **`ALL_PLUGIN_IDS`** | 短 id 元组（CORE + EXTENDED）；推送仍需另加 `PHASE5_PLUGIN_IDS` |
 | `icon` | `None` | 可选 PNG，sync 时拷到 Android mipmap |
 
 ```python
 from reflex_capacitor import CapacitorPlugin
-from reflex_capacitor.bridge.plugins import ALL_PLUGIN_IDS
 
 CapacitorPlugin(
     backend_url="https://api.example.com",
     app_id="com.example.myapp",
     app_name="My App",
-    plugins=ALL_PLUGIN_IDS,  # 推荐；默认仅 CORE
+    # plugins 默认已是 ALL_PLUGIN_IDS；要缩小体积再传 CORE_PLUGIN_IDS
 )
 ```
 
 ---
 
-## 插件分层（推荐默认）
+## 插件分层
 
 | 常量 | 内容 | 何时用 |
 |------|------|--------|
-| `CORE_PLUGIN_IDS` | 通知、剪贴板、分享、状态栏、设备、网络… | 最小壳 |
-| `EXTENDED_PLUGIN_IDS` | 相机、定位、文件系统、键盘、browser、录音… | 需要传感器/文件/麦克风 |
-| `ALL_PLUGIN_IDS` | CORE + EXTENDED | **PyPI / 通用默认推荐** |
+| `ALL_PLUGIN_IDS` | CORE + EXTENDED | **默认**（相机/定位/TTS/录音等，不含推送） |
+| `CORE_PLUGIN_IDS` | 通知、剪贴板、分享、状态栏、设备、网络… | 想瘦身时显式传入 |
+| `EXTENDED_PLUGIN_IDS` | 相机、定位、文件系统、键盘、browser、录音、TTS… | 一般不必单独用 |
 | `PHASE5_PLUGIN_IDS` | 当前含 `push-notifications` | **显式**需要远程推送时再加 |
 
 ```python
-from reflex_capacitor.bridge.plugins import ALL_PLUGIN_IDS, PHASE5_PLUGIN_IDS
+from reflex_capacitor.bridge.plugins import ALL_PLUGIN_IDS, CORE_PLUGIN_IDS, PHASE5_PLUGIN_IDS
 
-# 推荐默认（不含 FCM）
-plugins=ALL_PLUGIN_IDS
+# 默认即可，不必写 plugins=
+
+# 瘦身
+plugins=CORE_PLUGIN_IDS
 
 # 需要远程推送时
 plugins=ALL_PLUGIN_IDS + PHASE5_PLUGIN_IDS
 ```
-
 推送需自备 Firebase / APNs；本包**不含**服务端实现 → [push-notifications.md](push-notifications.md)。
 
 ---

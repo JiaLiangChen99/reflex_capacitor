@@ -2,7 +2,7 @@
 
 使用 `@capacitor/push-notifications` 注册设备并接收 FCM / APNs 推送（**可选**）。
 
-> **可选能力，非默认依赖。** 上架 PyPI / 通用脚手架时**不要**把 `push-notifications` 放进默认 `plugins`；只有需要远程推送时再显式启用。本仓库 demo 为了演示才挂了 `PHASE5_PLUGIN_IDS`。配置分层见 [configuration.md](configuration.md)。
+> **可选能力，非默认依赖。** ``CapacitorPlugin`` 默认是 ``ALL_PLUGIN_IDS``（不含推送）；只有需要远程推送时再显式加 ``PHASE5_PLUGIN_IDS``。本仓库 demo 为了演示才挂了推送。配置分层见 [configuration.md](configuration.md)。
 
 > **与本地通知的区别**：`mobile.notify()` 是 App 内触发的**本地通知**；远程推送由服务端经 Firebase（Android）或 APNs（iOS）下发。App 在线时也可用 WebSocket + `mobile.notify()`，不必强制接 FCM。
 
@@ -14,7 +14,7 @@
 from reflex_capacitor.bridge.plugins import ALL_PLUGIN_IDS, PHASE5_PLUGIN_IDS
 
 CapacitorPlugin(
-    # 推荐默认：ALL_PLUGIN_IDS；需要远程推送再加 PHASE5
+    # 默认已是 ALL；需要远程推送再加 PHASE5
     plugins=ALL_PLUGIN_IDS + PHASE5_PLUGIN_IDS,
     ...
 )

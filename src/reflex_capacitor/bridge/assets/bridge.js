@@ -79,6 +79,34 @@
     return registerNativePlugin("TextToSpeech");
   }
 
+  function audioFocusPlugin() {
+    return registerNativePlugin("AudioFocus");
+  }
+
+  async function withAudioFocus(mode, fn) {
+    const focus = audioFocusPlugin();
+    let requested = false;
+    if (focus && typeof focus.request === "function" && mode !== "none") {
+      try {
+        const res = await focus.request({ mode: mode || "pause" });
+        requested = !!(res && res.granted);
+      } catch (_err) {
+        requested = false;
+      }
+    }
+    try {
+      return await fn();
+    } finally {
+      if (requested && focus && typeof focus.abandon === "function") {
+        try {
+          await focus.abandon();
+        } catch (_err) {
+          /* ignore */
+        }
+      }
+    }
+  }
+
   function recordingPlayUrl(rec) {
     if (!rec) return "";
     if (rec.dataUrl) return rec.dataUrl;
@@ -847,101 +875,120 @@
       };
     },
 
-    async speak({ text, lang, rate, pitch, volume }) {
+    async speak({ text, lang, rate, pitch, volume, audioFocus }) {
       const utteranceText = text == null ? "" : String(text);
       if (!utteranceText) {
         return { ok: false, error: "empty_text" };
       }
+      const focusMode =
+        audioFocus === false || audioFocus === "none"
+          ? "none"
+          : audioFocus === "duck"
+            ? "duck"
+            : "pause";
       const opts = {
         text: utteranceText,
         lang: lang || "zh-CN",
         rate: Math.max(0.1, Math.min(Number(rate) || 1, 10)),
         pitch: Math.max(0, Math.min(Number(pitch) || 1, 2)),
         volume: Math.max(0, Math.min(Number(volume) || 1, 1)),
+        // iOS: playback session competes with other audio better than ambient.
+        category: "playback",
         queueStrategy: 1,
       };
 
-      // Prefer native Capacitor TTS (Android/iOS system engine) — many WebViews lack speechSynthesis.
-      const TTS = textToSpeechPlugin();
-      if (TTS && typeof TTS.speak === "function") {
+      return await withAudioFocus(focusMode, async function () {
+        const TTS = textToSpeechPlugin();
+        if (TTS && typeof TTS.speak === "function") {
+          try {
+            await TTS.speak(opts);
+            return {
+              ok: true,
+              speaking: false,
+              engine: "TextToSpeech",
+              lang: opts.lang,
+              textLength: utteranceText.length,
+              audioFocus: focusMode,
+            };
+          } catch (err) {
+            return {
+              ok: false,
+              error: String(err && err.message ? err.message : err),
+              engine: "TextToSpeech",
+            };
+          }
+        }
+
+        if (
+          typeof window === "undefined" ||
+          !window.speechSynthesis ||
+          typeof SpeechSynthesisUtterance === "undefined"
+        ) {
+          return {
+            ok: false,
+            error: "tts_unavailable",
+            hint: "Enable text-to-speech in CapacitorPlugin.plugins and re-sync/rebuild the APK.",
+          };
+        }
+        const synth = window.speechSynthesis;
+        const waitForVoices = function () {
+          return new Promise(function (resolve) {
+            const existing = synth.getVoices();
+            if (existing && existing.length) {
+              resolve(existing);
+              return;
+            }
+            let done = false;
+            const finish = function () {
+              if (done) return;
+              done = true;
+              synth.removeEventListener("voiceschanged", onVoices);
+              resolve(synth.getVoices() || []);
+            };
+            const onVoices = function () {
+              finish();
+            };
+            synth.addEventListener("voiceschanged", onVoices);
+            setTimeout(finish, 500);
+          });
+        };
         try {
-          await TTS.speak(opts);
+          synth.cancel();
+          await waitForVoices();
+          const utter = new SpeechSynthesisUtterance(utteranceText);
+          utter.lang = opts.lang;
+          utter.rate = opts.rate;
+          utter.pitch = opts.pitch;
+          utter.volume = opts.volume;
+          await new Promise(function (resolve, reject) {
+            let settled = false;
+            const done = function () {
+              if (settled) return;
+              settled = true;
+              resolve();
+            };
+            utter.onend = done;
+            utter.onerror = function (event) {
+              if (settled) return;
+              settled = true;
+              const err = (event && event.error) || "speak_failed";
+              reject(new Error(String(err)));
+            };
+            synth.speak(utter);
+            setTimeout(done, Math.max(8000, utteranceText.length * 250));
+          });
           return {
             ok: true,
             speaking: false,
-            engine: "TextToSpeech",
-            lang: opts.lang,
+            engine: "speechSynthesis",
+            lang: utter.lang,
             textLength: utteranceText.length,
+            audioFocus: focusMode,
           };
         } catch (err) {
-          return { ok: false, error: String(err && err.message ? err.message : err), engine: "TextToSpeech" };
+          return { ok: false, error: String(err && err.message ? err.message : err) };
         }
-      }
-
-      if (typeof window === "undefined" || !window.speechSynthesis || typeof SpeechSynthesisUtterance === "undefined") {
-        return {
-          ok: false,
-          error: "tts_unavailable",
-          hint: "Enable text-to-speech in CapacitorPlugin.plugins and re-sync/rebuild the APK.",
-        };
-      }
-      const synth = window.speechSynthesis;
-      const waitForVoices = function () {
-        return new Promise(function (resolve) {
-          const existing = synth.getVoices();
-          if (existing && existing.length) {
-            resolve(existing);
-            return;
-          }
-          let done = false;
-          const finish = function () {
-            if (done) return;
-            done = true;
-            synth.removeEventListener("voiceschanged", onVoices);
-            resolve(synth.getVoices() || []);
-          };
-          const onVoices = function () {
-            finish();
-          };
-          synth.addEventListener("voiceschanged", onVoices);
-          setTimeout(finish, 500);
-        });
-      };
-      try {
-        synth.cancel();
-        await waitForVoices();
-        const utter = new SpeechSynthesisUtterance(utteranceText);
-        utter.lang = opts.lang;
-        utter.rate = opts.rate;
-        utter.pitch = opts.pitch;
-        utter.volume = opts.volume;
-        await new Promise(function (resolve, reject) {
-          let settled = false;
-          const done = function () {
-            if (settled) return;
-            settled = true;
-            resolve();
-          };
-          utter.onend = done;
-          utter.onerror = function (event) {
-            if (settled) return;
-            settled = true;
-            const err = (event && event.error) || "speak_failed";
-            reject(new Error(String(err)));
-          };
-          synth.speak(utter);
-          setTimeout(done, Math.max(8000, utteranceText.length * 250));
-        });
-        return {
-          ok: true,
-          speaking: false,
-          engine: "speechSynthesis",
-          lang: utter.lang,
-          textLength: utteranceText.length,
-        };
-      } catch (err) {
-        return { ok: false, error: String(err && err.message ? err.message : err) };
-      }
+      });
     },
 
     async stopSpeak() {
@@ -955,6 +1002,14 @@
       }
       if (typeof window !== "undefined" && window.speechSynthesis) {
         window.speechSynthesis.cancel();
+      }
+      const focus = audioFocusPlugin();
+      if (focus && typeof focus.abandon === "function") {
+        try {
+          await focus.abandon();
+        } catch (_err) {
+          /* ignore */
+        }
       }
       return { ok: true, speaking: false };
     },

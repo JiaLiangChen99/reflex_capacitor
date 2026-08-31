@@ -26,7 +26,6 @@ See [`docs/guide/cli.md`](docs/guide/cli.md) and [`docs/guide/install.md`](docs/
 # rxconfig.py
 import reflex as rx
 from reflex_capacitor import CapacitorPlugin
-from reflex_capacitor.bridge.plugins import ALL_PLUGIN_IDS
 
 config = rx.Config(
     app_name="demo",
@@ -36,7 +35,7 @@ config = rx.Config(
             backend_url="https://api.example.com",
             app_id="com.example.myapp",
             app_name="My App",
-            plugins=ALL_PLUGIN_IDS,  # default in code is CORE only; ALL recommended
+            # plugins defaults to ALL_PLUGIN_IDS (camera/TTS/recorder/…; no push)
         ),
     ],
 )

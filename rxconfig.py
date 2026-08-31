@@ -18,8 +18,7 @@ config = rx.Config(
             backend_url="http://192.168.1.56:8003",  # 真机调试改为你 PC 的局域网 IP
             app_name="Shell",
             app_id="dev.reflex.capacitor.demo",
-            # Demo only: PHASE5 adds push-notifications (FCM). PyPI consumers should
-            # default to ALL_PLUGIN_IDS and opt in when they need remote push.
+            # Default is already ALL_PLUGIN_IDS; demo also enables remote push.
             plugins=ALL_PLUGIN_IDS + PHASE5_PLUGIN_IDS,
         ),
     ],

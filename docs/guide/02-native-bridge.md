@@ -113,7 +113,7 @@ window.__REFLEX_CAPACITOR__ = {
 | 条码扫描 | community | `scan_barcode(callback)` | 未做 |
 | 应用内浏览器 | `@capacitor/browser` | `browser_open(url)` | P1（EXTENDED） |
 | 录音 / 回放 | 内置 `bridge.js`（MediaRecorder） | `start_recording` / `stop_recording` / `play_recording` | P1（EXTENDED，builtin） |
-| 系统播报 TTS | `@capacitor-community/text-to-speech`（原生）+ Web 回退 | `speak` / `stop_speak` | 启用 `text-to-speech`；播报 LLM 文本在端上 |
+| 系统播报 TTS | `@capacitor-community/text-to-speech`（原生）+ Web 回退 | `speak` / `stop_speak` | 启用 `text-to-speech`；播报时 Android 默认申请 audio focus（`audio_focus="pause"` 暂停多数音乐 App，`"duck"` 仅压低音量，`"none"` 混播）；需 `sync` 后重装 APK 以注入 `AudioFocusPlugin` |
 
 > **「组件」**：Capacitor 官方几乎都是 **命令式 Plugin API**，不是 React Native 那种 `<Camera />` 组件。Google Maps 等少数带 Web Component；MVP **不包地图组件**，需要时再单独立项。
 
@@ -209,7 +209,7 @@ def invoke(command: str, args: Mapping | None = None, *, callback=None) -> Event
 |------|------|----------|
 | 核心 | `CORE_PLUGIN_IDS` | app、splash、status-bar、notify、toast、haptics、clipboard、share、device、network |
 | 扩展 | `EXTENDED_PLUGIN_IDS` | camera、geolocation、filesystem、preferences、keyboard、browser、voice-recorder |
-| 推荐默认 | `ALL_PLUGIN_IDS` | CORE + EXTENDED（**不含**推送） |
+| 推荐默认 | `ALL_PLUGIN_IDS` | CORE + EXTENDED（**不含**推送；即 `CapacitorPlugin` 默认值） |
 | 可选 | `PHASE5_PLUGIN_IDS` | `push-notifications`（需自备 FCM/APNs） |
 
 ---

@@ -43,7 +43,7 @@ PLUGIN_PACKAGE_VERSIONS: Final[dict[PluginId, str]] = {
 # Enabling the id only wires OS microphone permissions via finalize_bridge.
 BUILTIN_BRIDGE_PLUGIN_IDS: Final[frozenset[PluginId]] = frozenset({"voice-recorder"})
 
-# Bundled with every app unless CapacitorPlugin.plugins overrides the tuple.
+# Minimal set — pass ``plugins=CORE_PLUGIN_IDS`` to shrink deps/permissions.
 CORE_PLUGIN_IDS: Final[tuple[PluginId, ...]] = (
     "local-notifications",
     "clipboard",
@@ -69,12 +69,12 @@ EXTENDED_PLUGIN_IDS: Final[tuple[PluginId, ...]] = (
     "text-to-speech",
 )
 
-# Phase 5 — push, etc. (enable explicitly; may need FCM / APNs project setup).
+# Phase 5 — push, etc. (opt-in; needs FCM / APNs project setup).
 PHASE5_PLUGIN_IDS: Final[tuple[PluginId, ...]] = (
     "push-notifications",
 )
 
-# Core + extended; used by the repo demo (rxconfig.py).
+# Default for ``CapacitorPlugin.plugins`` (core + extended; no push).
 ALL_PLUGIN_IDS: Final[tuple[PluginId, ...]] = CORE_PLUGIN_IDS + EXTENDED_PLUGIN_IDS
 
 _KNOWN_PLUGIN_IDS: Final[frozenset[PluginId]] = frozenset(CAPACITOR_PLUGIN_PACKAGES) | BUILTIN_BRIDGE_PLUGIN_IDS

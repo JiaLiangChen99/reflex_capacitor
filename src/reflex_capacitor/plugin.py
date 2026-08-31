@@ -21,7 +21,7 @@ from .config import (
     default_app_id,
     slugify,
 )
-from .bridge.plugins import CORE_PLUGIN_IDS, apply_package_json_deps, resolve_plugin_ids
+from .bridge.plugins import ALL_PLUGIN_IDS, apply_package_json_deps, resolve_plugin_ids
 from .bridge.inject import install_bridge
 
 # Marker so we know this directory was scaffolded by reflex-capacitor.
@@ -69,7 +69,9 @@ class CapacitorPlugin(Plugin):
         app_id: Reverse-DNS bundle id (e.g. ``com.example.myapp``).
         capacitor_dir: Capacitor project directory relative to the app root.
         web_dir: Folder name inside ``capacitor_dir`` used as Capacitor ``webDir``.
-        plugins: Capacitor plugin short ids (see ``bridge.plugins.CAPACITOR_PLUGIN_PACKAGES``).
+        plugins: Capacitor plugin short ids (defaults to ``ALL_PLUGIN_IDS`` —
+            core + camera/geo/TTS/recorder/etc.; still excludes push — add
+            ``PHASE5_PLUGIN_IDS`` when you need FCM/APNs).
         icon: Optional path (relative to app root) to a PNG copied into Android mipmap
             folders when ``android/`` exists (e.g. ``assets/icon.png``).
     """
@@ -79,7 +81,7 @@ class CapacitorPlugin(Plugin):
     app_id: str | None = None
     capacitor_dir: str = DEFAULT_CAPACITOR_DIR
     web_dir: str = DEFAULT_WEB_DIR
-    plugins: tuple[str, ...] = CORE_PLUGIN_IDS
+    plugins: tuple[str, ...] = ALL_PLUGIN_IDS
     icon: str | None = None
 
     def get_static_assets(self, **context) -> Sequence[tuple[Path, str | bytes]]:
@@ -329,6 +331,7 @@ class CapacitorPlugin(Plugin):
         """
         from reflex_base.utils import console
 
+        from .bridge.android_audio_focus import install_audio_focus_plugin
         from .bridge.plugins import (
             copy_plugin_vendor_scripts,
             ensure_android_camera_permissions,
@@ -364,6 +367,11 @@ class CapacitorPlugin(Plugin):
             ensure_android_microphone_permission(manifest)
         if "text-to-speech" in self._resolved_plugins():
             ensure_android_tts_queries(manifest)
+            focus_actions = install_audio_focus_plugin(root / "android")
+            if focus_actions:
+                console.info(
+                    "reflex-capacitor: Android AudioFocus plugin — " + ", ".join(focus_actions)
+                )
 
         ios_added = apply_ios_plugin_permissions(root, self._resolved_plugins())
         if ios_added:

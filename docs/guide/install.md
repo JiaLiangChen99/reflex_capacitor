@@ -70,7 +70,7 @@ reflex-capacitor sync
 ```
 
 配置示例 → [configuration.md](configuration.md)。  
-默认 `plugins=` 为 `CORE_PLUGIN_IDS`；多数 App 建议显式传 `ALL_PLUGIN_IDS`（仍**不含**推送）。
+默认 `plugins=` 为 `ALL_PLUGIN_IDS`（仍**不含**推送；推送用 `PHASE5_PLUGIN_IDS`）。
 
 ---
 

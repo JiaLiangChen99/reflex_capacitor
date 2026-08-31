@@ -119,11 +119,20 @@ def test_guess_lan_ip_returns_string():
     assert ip.count(".") == 3
 
 
-def test_scaffold_package_json_lists_all_plugins(tmp_path: Path, monkeypatch):
-    from reflex_capacitor.bridge.plugins import ALL_PLUGIN_IDS
+def test_default_plugins_are_all_ids():
+    from reflex_capacitor.bridge.plugins import ALL_PLUGIN_IDS, resolve_plugin_ids
 
+    plugin = CapacitorPlugin()
+    assert plugin.plugins == ALL_PLUGIN_IDS
+    assert "camera" in plugin._resolved_plugins()
+    assert "text-to-speech" in plugin._resolved_plugins()
+    assert "push-notifications" not in plugin._resolved_plugins()
+    assert plugin._resolved_plugins() == resolve_plugin_ids(ALL_PLUGIN_IDS)
+
+
+def test_scaffold_package_json_lists_all_plugins(tmp_path: Path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    plugin = CapacitorPlugin(plugins=ALL_PLUGIN_IDS)
+    plugin = CapacitorPlugin()
     cap_root = tmp_path / "capacitor"
     plugin._scaffold(cap_root)
     plugin._configure(cap_root)

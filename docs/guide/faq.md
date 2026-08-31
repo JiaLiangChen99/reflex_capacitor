@@ -12,10 +12,9 @@
 
 ---
 
-### 为什么默认插件不是「全家桶」？
+### 默认会装哪些原生插件？
 
-代码默认是 `CORE_PLUGIN_IDS`（体积与权限更小）。文档推荐多数 App 显式写 `ALL_PLUGIN_IDS`。  
-**推送不在默认里**，需 `PHASE5_PLUGIN_IDS`。见 [configuration.md](configuration.md)。
+默认是 `ALL_PLUGIN_IDS`（相机、定位、TTS、录音等）。**推送不在默认里**，需 `PHASE5_PLUGIN_IDS`。想瘦身再显式传 `CORE_PLUGIN_IDS`。见 [configuration.md](configuration.md)。
 
 ---
 
@@ -73,7 +72,7 @@ reflex-capacitor sync --proxy http://127.0.0.1:7890
 ### PyPI 上的包和本仓库 demo 有什么差别？
 
 库本身不含你的 `capacitor/android` 工程（`init` 生成）。  
-本仓库 `demo/` + `PHASE5` 仅为演示；对外示例应默认 `ALL_PLUGIN_IDS`、不含推送。见 [install.md](install.md)。
+本仓库 `demo/` + `PHASE5` 仅为演示；对外默认已是 `ALL_PLUGIN_IDS`、不含推送。见 [install.md](install.md)。
 
 ---
 

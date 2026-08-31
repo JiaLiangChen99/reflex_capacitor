@@ -28,7 +28,6 @@ reflex-capacitor check --android
 ```python
 import reflex as rx
 from reflex_capacitor import CapacitorPlugin
-from reflex_capacitor.bridge.plugins import ALL_PLUGIN_IDS
 
 config = rx.Config(
     app_name="demo",
@@ -38,7 +37,7 @@ config = rx.Config(
             backend_url="http://192.168.1.56:8001",  # 生产用 https://
             app_id="dev.reflex.myapp",
             app_name="My App",
-            plugins=ALL_PLUGIN_IDS,  # 推送等见 configuration.md
+            # 默认 ALL_PLUGIN_IDS；推送见 configuration.md
         ),
     ],
 )

@@ -35,13 +35,13 @@ Python ↔ Capacitor 桥接代码位于 `src/reflex_capacitor/bridge/`：
 | keyboard | 无 | 无 | |
 | browser | 无 | 无 | 应用内浏览器 |
 | filesystem | 无（沙箱内） | 无 | 仅 app 沙箱目录 |
-| text-to-speech | Android 11+ 需 `TTS_SERVICE` queries | 系统 TTS 引擎 | `@capacitor-community/text-to-speech`；`mobile.speak` |
+| text-to-speech | Android 11+ 需 `TTS_SERVICE` queries；`sync` 会注入本地 `AudioFocusPlugin` | 系统 TTS 引擎；播报时抢音频焦点 | `@capacitor-community/text-to-speech`；`mobile.speak(..., audio_focus=)` |
 
-## 扩展插件（demo 默认启用）
+## 默认插件
 
-`rxconfig.py` 使用 `ALL_PLUGIN_IDS = CORE_PLUGIN_IDS + EXTENDED_PLUGIN_IDS`（见 `bridge/plugins.py`）。
+`CapacitorPlugin` 默认使用 `ALL_PLUGIN_IDS`（CORE + EXTENDED，见 `bridge/plugins.py`）。
 
-若只要核心插件，改回 `plugins=CORE_PLUGIN_IDS` 或自定义 tuple。
+若只要核心插件，显式传 `plugins=CORE_PLUGIN_IDS` 或自定义 tuple。
 
 ## 可选插件（推送等）
 
