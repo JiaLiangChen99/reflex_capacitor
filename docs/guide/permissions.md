@@ -35,7 +35,7 @@ Python ↔ Capacitor 桥接代码位于 `src/reflex_capacitor/bridge/`：
 | keyboard | 无 | 无 | |
 | browser | 无 | 无 | 应用内浏览器 |
 | filesystem | 无（沙箱内） | 无 | 仅 app 沙箱目录 |
-| voice-recorder | `RECORD_AUDIO`, `MODIFY_AUDIO_SETTINGS` | `NSMicrophoneUsageDescription` | 实现在 PyPI 包内 `bridge.js`；WebView 录音两者都要，缺后者常报 permission_denied |
+| text-to-speech | Android 11+ 需 `TTS_SERVICE` queries | 系统 TTS 引擎 | `@capacitor-community/text-to-speech`；`mobile.speak` |
 
 ## 扩展插件（demo 默认启用）
 

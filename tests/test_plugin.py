@@ -58,11 +58,13 @@ def test_all_plugin_ids_include_core_and_extended():
     assert "camera" in ALL_PLUGIN_IDS
     assert "voice-recorder" in ALL_PLUGIN_IDS
     assert "voice-recorder" in EXTENDED_PLUGIN_IDS
+    assert "text-to-speech" in ALL_PLUGIN_IDS
     from reflex_capacitor.bridge.plugins import BUILTIN_BRIDGE_PLUGIN_IDS, has_npm_package
 
     assert "voice-recorder" in BUILTIN_BRIDGE_PLUGIN_IDS
     assert not has_npm_package("voice-recorder")
     assert has_npm_package("camera")
+    assert has_npm_package("text-to-speech")
 
 
 def test_phase5_plugin_ids_separate_from_all():
@@ -131,7 +133,7 @@ def test_scaffold_package_json_lists_all_plugins(tmp_path: Path, monkeypatch):
     assert "@capacitor/camera" in deps
     assert "@capacitor/geolocation" in deps
     assert "capacitor-voice-recorder" not in deps
-    assert "@capacitor/camera" in deps
+    assert deps.get("@capacitor-community/text-to-speech") == "^6.1.0"
 
 
 def test_apply_icon_copies_to_android_mipmaps(tmp_path: Path, monkeypatch):

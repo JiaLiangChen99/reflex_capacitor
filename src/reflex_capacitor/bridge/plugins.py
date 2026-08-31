@@ -30,6 +30,13 @@ CAPACITOR_PLUGIN_PACKAGES: Final[dict[PluginId, str]] = {
     "geolocation": "@capacitor/geolocation",
     "browser": "@capacitor/browser",
     "push-notifications": "@capacitor/push-notifications",
+    # Cap 7 line is 6.x (8.x requires Capacitor 8).
+    "text-to-speech": "@capacitor-community/text-to-speech",
+}
+
+# npm semver when it must not follow CAPACITOR_VERSION (^7).
+PLUGIN_PACKAGE_VERSIONS: Final[dict[PluginId, str]] = {
+    "text-to-speech": "^6.1.0",
 }
 
 # Implemented inside the PyPI-shipped ``bridge.js`` (no extra npm package).
@@ -59,6 +66,7 @@ EXTENDED_PLUGIN_IDS: Final[tuple[PluginId, ...]] = (
     "browser",
     "filesystem",
     "voice-recorder",
+    "text-to-speech",
 )
 
 # Phase 5 — push, etc. (enable explicitly; may need FCM / APNs project setup).
@@ -89,6 +97,7 @@ __all__ = [
     "CORE_PLUGIN_IDS",
     "EXTENDED_PLUGIN_IDS",
     "PHASE5_PLUGIN_IDS",
+    "PLUGIN_PACKAGE_VERSIONS",
     "PluginId",
     "apply_package_json_deps",
     "copy_plugin_vendor_scripts",
@@ -97,6 +106,7 @@ __all__ = [
     "ensure_android_microphone_permission",
     "ensure_android_notification_permission",
     "ensure_android_permissions",
+    "ensure_android_tts_queries",
     "ensure_android_vibrate_permission",
     "has_npm_package",
     "resolve_plugin_ids",
@@ -167,7 +177,8 @@ def apply_package_json_deps(
     for plugin_id in plugin_ids:
         if not has_npm_package(plugin_id):
             continue
-        dependencies[CAPACITOR_PLUGIN_PACKAGES[plugin_id]] = capacitor_version
+        version = PLUGIN_PACKAGE_VERSIONS.get(plugin_id, capacitor_version)
+        dependencies[CAPACITOR_PLUGIN_PACKAGES[plugin_id]] = version
 
     if package.get("name") in (None, "reflex-capacitor-app"):
         package["name"] = slugify(str(package.get("name", "reflex-capacitor-app")))
@@ -264,6 +275,25 @@ def ensure_android_microphone_permission(manifest_path: Path | str) -> None:
             _ANDROID_PERMISSION_MODIFY_AUDIO_SETTINGS,
         ),
     )
+
+
+def ensure_android_tts_queries(manifest_path: Path | str) -> None:
+    """Declare TTS service intent query required on Android 11+ for community TTS."""
+    path = Path(manifest_path)
+    if not path.is_file():
+        return
+    text = path.read_text(encoding="utf-8")
+    if "android.intent.action.TTS_SERVICE" in text:
+        return
+    queries_block = (
+        "    <queries>\n"
+        "        <intent>\n"
+        '            <action android:name="android.intent.action.TTS_SERVICE" />\n'
+        "        </intent>\n"
+        "    </queries>\n"
+    )
+    if "</manifest>" in text:
+        path.write_text(text.replace("</manifest>", queries_block + "</manifest>", 1), encoding="utf-8")
 
 
 def ensure_android_permissions(manifest_path: Path | str, permissions: tuple[str, ...]) -> None:

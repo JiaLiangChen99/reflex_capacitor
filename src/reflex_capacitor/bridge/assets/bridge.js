@@ -63,6 +63,22 @@
     return null;
   }
 
+  function registerNativePlugin(name) {
+    if (Plugins[name]) return Plugins[name];
+    if (Cap && typeof Cap.registerPlugin === "function") {
+      try {
+        return Cap.registerPlugin(name);
+      } catch (err) {
+        console.warn("reflex-capacitor: registerPlugin failed:", name, err);
+      }
+    }
+    return null;
+  }
+
+  function textToSpeechPlugin() {
+    return registerNativePlugin("TextToSpeech");
+  }
+
   function recordingPlayUrl(rec) {
     if (!rec) return "";
     if (rec.dataUrl) return rec.dataUrl;
@@ -836,11 +852,37 @@
       if (!utteranceText) {
         return { ok: false, error: "empty_text" };
       }
+      const opts = {
+        text: utteranceText,
+        lang: lang || "zh-CN",
+        rate: Math.max(0.1, Math.min(Number(rate) || 1, 10)),
+        pitch: Math.max(0, Math.min(Number(pitch) || 1, 2)),
+        volume: Math.max(0, Math.min(Number(volume) || 1, 1)),
+        queueStrategy: 1,
+      };
+
+      // Prefer native Capacitor TTS (Android/iOS system engine) — many WebViews lack speechSynthesis.
+      const TTS = textToSpeechPlugin();
+      if (TTS && typeof TTS.speak === "function") {
+        try {
+          await TTS.speak(opts);
+          return {
+            ok: true,
+            speaking: false,
+            engine: "TextToSpeech",
+            lang: opts.lang,
+            textLength: utteranceText.length,
+          };
+        } catch (err) {
+          return { ok: false, error: String(err && err.message ? err.message : err), engine: "TextToSpeech" };
+        }
+      }
+
       if (typeof window === "undefined" || !window.speechSynthesis || typeof SpeechSynthesisUtterance === "undefined") {
         return {
           ok: false,
           error: "tts_unavailable",
-          hint: "WebView has no speechSynthesis; install a native TTS plugin if needed.",
+          hint: "Enable text-to-speech in CapacitorPlugin.plugins and re-sync/rebuild the APK.",
         };
       }
       const synth = window.speechSynthesis;
@@ -869,10 +911,10 @@
         synth.cancel();
         await waitForVoices();
         const utter = new SpeechSynthesisUtterance(utteranceText);
-        utter.lang = lang || "zh-CN";
-        utter.rate = Math.max(0.1, Math.min(Number(rate) || 1, 10));
-        utter.pitch = Math.max(0, Math.min(Number(pitch) || 1, 2));
-        utter.volume = Math.max(0, Math.min(Number(volume) || 1, 1));
+        utter.lang = opts.lang;
+        utter.rate = opts.rate;
+        utter.pitch = opts.pitch;
+        utter.volume = opts.volume;
         await new Promise(function (resolve, reject) {
           let settled = false;
           const done = function () {
@@ -888,7 +930,6 @@
             reject(new Error(String(err)));
           };
           synth.speak(utter);
-          // Some WebViews never fire onend — keep a long safety timeout.
           setTimeout(done, Math.max(8000, utteranceText.length * 250));
         });
         return {
@@ -904,6 +945,14 @@
     },
 
     async stopSpeak() {
+      const TTS = textToSpeechPlugin();
+      if (TTS && typeof TTS.stop === "function") {
+        try {
+          await TTS.stop();
+        } catch (_err) {
+          /* ignore */
+        }
+      }
       if (typeof window !== "undefined" && window.speechSynthesis) {
         window.speechSynthesis.cancel();
       }
@@ -1041,6 +1090,7 @@
         "Browser",
         "Filesystem",
         "PushNotifications",
+        "TextToSpeech",
       ];
       const loaded = expected.filter(function (name) {
         return !!Plugins[name];

@@ -295,11 +295,13 @@ def speak(
     volume: float = 1.0,
     callback: Any = None,
 ) -> rx.event.EventSpec:
-    """Speak ``text`` with on-device system TTS (Web Speech API in the WebView).
+    """Speak ``text`` with on-device system TTS.
+
+    Prefers the Capacitor ``TextToSpeech`` native plugin when ``text-to-speech``
+    is enabled (recommended on Android WebView). Falls back to Web
+    ``speechSynthesis`` in browsers that support it.
 
     Cloud LLM replies should return text only; call this to announce locally.
-    No audio is uploaded. Works in browser and Capacitor when the WebView
-    exposes ``speechSynthesis`` (uses the OS TTS engine).
     """
     return call_bridge(
         "speak",

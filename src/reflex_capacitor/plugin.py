@@ -335,6 +335,7 @@ class CapacitorPlugin(Plugin):
             ensure_android_location_permissions,
             ensure_android_microphone_permission,
             ensure_android_notification_permission,
+            ensure_android_tts_queries,
             ensure_android_vibrate_permission,
         )
         from .bridge.ios_plist import apply_ios_plugin_permissions
@@ -361,6 +362,8 @@ class CapacitorPlugin(Plugin):
             ensure_android_location_permissions(manifest)
         if "voice-recorder" in self._resolved_plugins():
             ensure_android_microphone_permission(manifest)
+        if "text-to-speech" in self._resolved_plugins():
+            ensure_android_tts_queries(manifest)
 
         ios_added = apply_ios_plugin_permissions(root, self._resolved_plugins())
         if ios_added:
