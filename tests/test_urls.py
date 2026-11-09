@@ -12,8 +12,8 @@ from reflex_capacitor.urls import get_upload_url, resolve_backend_base
 
 
 def test_resolve_backend_base_prefers_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv(DEV_BACKEND_URL_ENV, "http://192.168.1.56:8003/")
-    assert resolve_backend_base() == "http://192.168.1.56:8003"
+    monkeypatch.setenv(DEV_BACKEND_URL_ENV, "http://192.168.10.105:8003/")
+    assert resolve_backend_base() == "http://192.168.10.105:8003"
 
 
 def test_resolve_backend_base_uses_plugin(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -28,7 +28,7 @@ def test_resolve_backend_base_uses_plugin(monkeypatch: pytest.MonkeyPatch) -> No
 
 
 def test_get_upload_url_joins_upload_path(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv(DEV_BACKEND_URL_ENV, "http://192.168.1.56:8003")
+    monkeypatch.setenv(DEV_BACKEND_URL_ENV, "http://192.168.10.105:8003")
     url = get_upload_url("sample.mp3")
-    assert url == "http://192.168.1.56:8003/_upload/sample.mp3"
+    assert url == "http://192.168.10.105:8003/_upload/sample.mp3"
     assert "localhost" not in url
