@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.3.3] — 2026-11-09
+
 ### Features
 
 - ``CapacitorPlugin.plugins`` defaults to ``ALL_PLUGIN_IDS`` (core + extended; push still opt-in via ``PHASE5_PLUGIN_IDS``)
@@ -18,6 +20,11 @@ All notable changes to this project are documented here.
 ### Fixes
 
 - Proxy unit test expected wrong Gradle port (``7892`` typo vs ``7890``)
+- Android APK CI: upgrade ``setup-android`` to v4 and install ``platforms;android-35`` + ``build-tools;35.0.0`` (SDK no longer ships obsolete ``tools`` package)
+
+### Chores
+
+- Demo default ``CapacitorPlugin.backend_url``: ``http://192.168.10.105:8003`` (was ``192.168.1.56:8003``)
 
 ## [0.3.2] — 2026-08-25
 
