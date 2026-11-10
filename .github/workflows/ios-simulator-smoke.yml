@@ -1,0 +1,132 @@
+# Manual smoke test: scaffold + sync + compile the Capacitor iOS app for Simulator
+# without Apple Developer signing. Does NOT run on push/PR (macOS minutes).
+#
+# Does not cover: real devices, TestFlight, App Store archive, or `reflex-capacitor build ios`
+# (`npx cap build ios` expects signing). CI uses xcodebuild + CODE_SIGNING_ALLOWED=NO instead.
+
+name: iOS Simulator smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-simulator-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  simulator-compile:
+    name: Compile for iOS Simulator
+    runs-on: macos-latest
+    timeout-minutes: 60
+
+    env:
+      # Override rxconfig LAN URL — same pattern as Android CI (no hardcoded personal IPs).
+      REFLEX_CAPACITOR_DEV_BACKEND_URL: https://api.example.com
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup uv (Python)
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Python package
+        run: |
+          uv sync
+          uv pip install -e .
+
+      - name: Host check (iOS)
+        run: uv run reflex-capacitor check --ios
+
+      - name: Scaffold Capacitor + iOS
+        run: uv run reflex-capacitor init --platform ios
+
+      - name: Export frontend & cap sync
+        run: uv run reflex-capacitor sync
+
+      - name: Verify baked HTTPS backend
+        env:
+          BACKEND_URL: https://api.example.com
+        run: |
+          set -euo pipefail
+          echo "== capacitor.config.json =="
+          cat capacitor/capacitor.config.json
+          echo
+          echo "== reflex-env (baked URLs) =="
+          ENV_JS=$(ls capacitor/www/assets/reflex-env-*.js | head -n1)
+          echo "file: $ENV_JS"
+          cat "$ENV_JS"
+          echo
+
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          backend = os.environ["BACKEND_URL"].rstrip("/")
+          conf = json.loads(Path("capacitor/capacitor.config.json").read_text())
+          env_js = next(Path("capacitor/www/assets").glob("reflex-env-*.js")).read_text()
+          index_html = Path("capacitor/www/index.html").read_text()
+
+          if backend not in env_js and f"{backend}/" not in env_js:
+              sys.exit(f"backend URL not found in env js: {backend}")
+
+          host = backend.split("://", 1)[1]
+          if f"wss://{host}/_event" not in env_js:
+              sys.exit(f"missing wss://{host}/_event in baked env")
+
+          if conf.get("server", {}).get("androidScheme") != "https":
+              sys.exit("expected androidScheme=https for https backend")
+
+          if "<!-- reflex-capacitor bridge begin -->" not in index_html:
+              sys.exit("bridge scripts not injected into index.html")
+          print("OK: https placeholder backend + bridge injected")
+          PY
+
+      - name: Install CocoaPods (if Podfile present)
+        working-directory: capacitor/ios/App
+        run: |
+          if [ -f Podfile ]; then
+            pod install
+          else
+            echo "No Podfile — assuming SPM layout from cap sync"
+          fi
+
+      - name: Detect Xcode workspace / project
+        id: xcode-entry
+        working-directory: capacitor/ios/App
+        run: |
+          if [ -d App.xcworkspace ]; then
+            echo "flag=-workspace App.xcworkspace" >> "$GITHUB_OUTPUT"
+          elif [ -f App.xcodeproj/project.pbxproj ]; then
+            echo "flag=-project App.xcodeproj" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::No App.xcworkspace or App.xcodeproj under capacitor/ios/App"
+            exit 1
+          fi
+
+      - name: xcodebuild (Simulator, no code signing)
+        working-directory: capacitor/ios/App
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            ${{ steps.xcode-entry.outputs.flag }} \
+            -scheme App \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData-ios-smoke" \
+            build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO

@@ -1,6 +1,6 @@
-# CI：Android debug APK
+# CI：Android APK · iOS Simulator 冒烟
 
-> 最后更新：2026-08-25 · 本机构建见 [android-build.md](android-build.md) · 总索引 [README.md](../README.md)
+> 最后更新：2026-11-10 · 本机构建见 [android-build.md](android-build.md) · 总索引 [README.md](../README.md)
 
 GitHub Actions 按 **Environment** 烘焙不同后端 URL，打 debug APK。
 
@@ -79,6 +79,29 @@ Workflow **Android Release AAB**（仅 `workflow_dispatch`）打 **signed AAB**�
 Actions → **Android Release AAB** → Run workflow → 下载 `app-release-production`。
 
 本地等价命令见 [publishing.md](publishing.md)。
+
+## iOS Simulator 编译冒烟（仅手动）
+
+Workflow **iOS Simulator smoke**（**仅** `workflow_dispatch`，不在 push/PR 上运行）在 GitHub 托管 **macOS** runner 上验证：
+
+1. 安装本仓库 Python 包与 Node 依赖  
+2. `reflex-capacitor init --platform ios` + `sync`  
+3. 对 **Simulator** 执行 `xcodebuild` 编译（`CODE_SIGNING_ALLOWED=NO`）
+
+**触发：** Actions → **iOS Simulator smoke** → Run workflow。
+
+**后端 URL：** 使用环境变量 `REFLEX_CAPACITOR_DEV_BACKEND_URL=https://api.example.com`（占位 HTTPS，与 Android CI 一样不在 workflow 里写死个人局域网 IP）。仓库内 `rxconfig.py` 的 LAN 地址会被覆盖。
+
+### 覆盖范围 / 不覆盖
+
+| 会验证 | 不会验证 |
+|--------|----------|
+| CLI 在 macOS 上 scaffold iOS 工程 | 真机安装、模拟器上启动 App |
+| `reflex export` → `cap sync` → CocoaPods（如有） | Apple Developer 证书、描述文件 |
+| 无签名条件下 Simulator **编译** | `reflex-capacitor build ios` / `npx cap build ios`（需要签名与导出） |
+| baked env 含 `wss://…/_event`、bridge 注入 | TestFlight / App Store Archive |
+
+本地若在 Mac 上需要可安装包，请用 Xcode 或配置签名后执行 `reflex-capacitor build ios`，见 [publishing.md](publishing.md)。
 
 ## 可选：App 图标
 
