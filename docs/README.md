@@ -25,7 +25,7 @@
 | [dev-reload.md](guide/dev-reload.md) | 真机开发 |
 | [debug.md](guide/debug.md) | 排障 |
 | [publishing.md](guide/publishing.md) | 签名与上架 |
-| [ci.md](guide/ci.md) | GitHub Actions 打 APK |
+| [ci.md](guide/ci.md) | GitHub Actions（Android APK · iOS Simulator 冒烟） |
 
 **按需阅读**（可选能力）：[permissions.md](guide/permissions.md) · [deep-linking.md](guide/deep-linking.md) · [push-notifications.md](guide/push-notifications.md)
 

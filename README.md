@@ -95,12 +95,13 @@ Network & CORS: [`docs/guide/configuration.md`](docs/guide/configuration.md)
 
 ## CI
 
-- Debug APK — [`docs/guide/ci.md`](docs/guide/ci.md)
-- Release AAB — [`docs/guide/publishing.md`](docs/guide/publishing.md)
+- Debug APK (push/PR + manual) — [`docs/guide/ci.md`](docs/guide/ci.md)
+- Release AAB (manual) — [`docs/guide/publishing.md`](docs/guide/publishing.md)
+- iOS Simulator compile smoke (manual, macOS runner) — [`docs/guide/ci.md`](docs/guide/ci.md#ios-simulator-编译冒烟仅手动)
 
 ## Limitations
 
 - **Remote backend only** — no embedded Python on device
 - **Not a mobile UI kit** — Reflex UI + `mobile.*` bridge
-- **Android-first** — iOS needs macOS; no iOS CI in this repo yet
+- **Android-first** — full device CI on Linux; iOS needs macOS and only has a **manual** Simulator compile smoke workflow (no signing / no store pipeline)
 - Host SDKs checked by `check`, never installed by this tool
